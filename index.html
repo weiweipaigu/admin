@@ -6,423 +6,279 @@
   <title>Admin | 瑋瑋老師的撒野記事錄</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
-    :root {
+    :root{
       --bg:#f7f5ef;--card:#fff;--text:#2f3a33;--muted:#66756b;--line:#dfe6df;
       --accent:#5d7a67;--accent-soft:#e8efe8;--danger:#a65353;--danger-soft:#f8eaea;
-      --success:#3f6d4b;--success-soft:#e8f2ea;--max:1100px;
+      --warn:#8a6d3b;--warn-soft:#fbf3dd;--success:#3f6d4b;--success-soft:#e8f2ea;--max:1180px
     }
     *{box-sizing:border-box}
     body{margin:0;font-family:"Segoe UI","Noto Sans TC",sans-serif;background:var(--bg);color:var(--text);line-height:1.65}
-    a{color:inherit;text-decoration:none}
-    button,input,select{font:inherit}
+    a{color:inherit;text-decoration:none}button,input,select,textarea{font:inherit}
     .wrap{width:min(94%,var(--max));margin:0 auto}
-    .nav{position:sticky;top:0;z-index:10;background:rgba(247,245,239,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+    .nav{position:sticky;top:0;z-index:20;background:rgba(247,245,239,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
     .nav-inner{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 0}
-    .brand{font-weight:700}
-    .nav-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-    .small{font-size:.9rem;color:var(--muted)}
-    .hero{padding:48px 0 22px}
-    .hero-box{background:linear-gradient(135deg,#eef4ee,#fbfaf6);border:1px solid var(--line);border-radius:28px;padding:30px 28px}
-    h1,h2,h3{line-height:1.25;margin:0 0 12px}
-    h1{font-size:clamp(2rem,5vw,2.8rem)}
-    p{margin:0 0 12px}
-    .section{padding:8px 0 26px}
-    .card{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:22px;box-shadow:0 10px 28px rgba(0,0,0,.04)}
-    .login-card{max-width:520px;margin:20px auto 0}
-    .field{display:grid;gap:6px;margin-bottom:14px}
-    label{font-weight:600}
-    input,select{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--text)}
-    input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+    .brand{font-weight:700}.nav-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.small{font-size:.9rem;color:var(--muted)}
+    .hero{padding:46px 0 22px}.hero-box{background:linear-gradient(135deg,#eef4ee,#fbfaf6);border:1px solid var(--line);border-radius:28px;padding:30px 28px}
+    h1,h2,h3{line-height:1.25;margin:0 0 12px}h1{font-size:clamp(2rem,5vw,2.8rem)}p{margin:0 0 12px}
+    .section{padding:8px 0 26px}.card{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:22px;box-shadow:0 10px 28px rgba(0,0,0,.04)}
+    .login-card{max-width:520px;margin:20px auto 0}.field{display:grid;gap:6px;margin-bottom:14px}label{font-weight:600}
+    input,select,textarea{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--text)}
+    textarea{min-height:110px;resize:vertical}
+    input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
     .btn{border:1px solid var(--accent);border-radius:999px;padding:10px 17px;background:var(--accent);color:#fff;font-weight:700;cursor:pointer}
-    .btn.secondary{background:transparent;color:var(--accent)}
+    .btn.secondary{background:transparent;color:var(--accent)}.btn.danger{background:transparent;color:var(--danger);border-color:var(--danger)}
     .btn:disabled{opacity:.55;cursor:not-allowed}
-    .toolbar{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:end}
-    .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px}
-    .summary-item{background:#fbfbf8;border:1px solid var(--line);border-radius:14px;padding:14px}
-    .summary-label{font-size:.86rem;color:var(--muted)}
-    .summary-value{font-size:1.35rem;font-weight:700}
-    .registration-list{display:grid;gap:16px;margin-top:18px}
-    .registration-card{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden}
+    .tabs{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px}.tab-btn{padding:10px 16px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--muted);cursor:pointer;font-weight:700}
+    .tab-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .toolbar{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+    .events-grid{display:grid;gap:14px}.event-card{border:1px solid var(--line);border-radius:18px;padding:16px;background:#fbfbf8}
+    .event-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap}.event-meta{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px}
+    .meta-box{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px}.meta-label{font-size:.8rem;color:var(--muted)}.meta-value{font-weight:700}
+    .status{display:inline-block;padding:5px 10px;border-radius:999px;font-size:.84rem;font-weight:700}.status.open{background:var(--success-soft);color:var(--success)}.status.closed{background:var(--danger-soft);color:var(--danger)}
+    .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+    .form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}.full{grid-column:1/-1}
+    .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px}.summary-item{background:#fbfbf8;border:1px solid var(--line);border-radius:14px;padding:14px}.summary-label{font-size:.86rem;color:var(--muted)}.summary-value{font-size:1.35rem;font-weight:700}
+    .registration-list{display:grid;gap:16px;margin-top:18px}.registration-card{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden}
     .registration-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;padding:16px 18px;background:#fbfbf8;border-bottom:1px solid var(--line)}
-    .registration-body{padding:16px 18px}
-    .contact-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px 18px;margin-bottom:16px}
-    .meta-label{font-size:.82rem;color:var(--muted)}
-    .meta-value{word-break:break-word}
-    .status{display:inline-block;padding:5px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-size:.84rem}
-    .participants-table{width:100%;border-collapse:collapse;margin-top:8px}
-    .participants-table th,.participants-table td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line)}
-    .participants-table th{color:var(--muted);font-size:.86rem}
-    .message{display:none;margin-top:14px;padding:12px 14px;border-radius:14px}
-    .message.error{display:block;background:var(--danger-soft);color:var(--danger)}
-    .message.success{display:block;background:var(--success-soft);color:var(--success)}
-    .empty{padding:28px;text-align:center;color:var(--muted)}
-    [hidden]{display:none!important}
+    .registration-body{padding:16px 18px}.contact-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px 18px;margin-bottom:16px}
+    .participants-table{width:100%;border-collapse:collapse}.participants-table th,.participants-table td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line)}.participants-table th{color:var(--muted);font-size:.86rem}
+    .message{display:none;margin:14px 0;padding:12px 14px;border-radius:14px}.message.error{display:block;background:var(--danger-soft);color:var(--danger)}.message.success{display:block;background:var(--success-soft);color:var(--success)}
+    .empty{padding:28px;text-align:center;color:var(--muted)}[hidden]{display:none!important}
     footer{padding:18px 0 46px;color:var(--muted);font-size:.9rem}
-    @media(max-width:760px){
-      .nav-inner,.registration-head{flex-direction:column;align-items:flex-start}
-      .toolbar{grid-template-columns:1fr}
-      .summary{grid-template-columns:1fr}
-      .contact-grid{grid-template-columns:1fr}
-      .hero-box,.card{padding:19px}
-      .participants-table{font-size:.92rem}
-    }
+    @media(max-width:800px){.nav-inner,.registration-head{flex-direction:column;align-items:flex-start}.event-meta{grid-template-columns:repeat(2,1fr)}.form-grid,.contact-grid,.summary{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
-  <nav class="nav">
-    <div class="wrap nav-inner">
-      <div class="brand">瑋瑋老師的撒野記事錄｜管理後台</div>
-      <div class="nav-actions">
-        <span id="loginUser" class="small"></span>
-        <button id="logoutBtn" class="btn secondary" type="button" hidden>登出</button>
-      </div>
-    </div>
-  </nav>
+<nav class="nav"><div class="wrap nav-inner"><div class="brand">瑋瑋老師的撒野記事錄｜管理後台</div><div class="nav-actions"><span id="loginUser" class="small"></span><button id="logoutBtn" class="btn secondary" hidden>登出</button></div></div></nav>
 
-  <header class="hero">
-    <div class="wrap">
-      <div class="hero-box">
-        <h1>報名管理 / Admin</h1>
-        <p>選擇活動後，可一次查看該活動的所有報名單與每位參加者資料。</p>
-      </div>
-    </div>
-  </header>
+<header class="hero"><div class="wrap"><div class="hero-box"><h1>活動與報名管理 / Admin</h1><p>新增、修改、開關活動報名，並查看每場活動的報名資料。</p></div></div></header>
 
-  <main>
-    <section id="loginSection" class="section">
-      <div class="wrap">
-        <article class="card login-card">
-          <h2>管理員登入</h2>
-          <p class="small">此頁面只供管理員使用。</p>
-          <form id="loginForm">
-            <div class="field">
-              <label for="email">E-mail</label>
-              <input id="email" type="email" autocomplete="username" required />
-            </div>
-            <div class="field">
-              <label for="password">密碼</label>
-              <input id="password" type="password" autocomplete="current-password" required />
-            </div>
-            <button id="loginBtn" class="btn" type="submit">登入</button>
-          </form>
-          <div id="loginMessage" class="message"></div>
-        </article>
-      </div>
-    </section>
+<main>
+<section id="loginSection" class="section"><div class="wrap"><article class="card login-card">
+<h2>管理員登入</h2>
+<form id="loginForm">
+<div class="field"><label for="email">E-mail</label><input id="email" type="email" required autocomplete="username"></div>
+<div class="field"><label for="password">密碼</label><input id="password" type="password" required autocomplete="current-password"></div>
+<button id="loginBtn" class="btn" type="submit">登入</button>
+</form><div id="loginMessage" class="message"></div>
+</article></div></section>
 
-    <section id="adminSection" class="section" hidden>
-      <div class="wrap">
-        <article class="card">
-          <div class="toolbar">
-            <div class="field" style="margin:0">
-              <label for="eventSelect">選擇活動</label>
-              <select id="eventSelect">
-                <option value="">請選擇活動</option>
-              </select>
-            </div>
-            <button id="exportBtn" class="btn secondary" type="button" disabled>匯出 CSV</button>
-          </div>
+<section id="adminSection" class="section" hidden><div class="wrap">
+<div class="tabs">
+<button class="tab-btn active" data-tab="events">活動管理</button>
+<button class="tab-btn" data-tab="registrations">報名資料</button>
+</div>
 
-          <div id="summary" class="summary" hidden>
-            <div class="summary-item">
-              <div class="summary-label">報名單數</div>
-              <div id="registrationCount" class="summary-value">0</div>
-            </div>
-            <div class="summary-item">
-              <div class="summary-label">總參加人數</div>
-              <div id="participantCount" class="summary-value">0</div>
-            </div>
-            <div class="summary-item">
-              <div class="summary-label">活動總名額</div>
-              <div id="capacityCount" class="summary-value">0</div>
-            </div>
-          </div>
+<div id="eventsTab">
+<article class="card">
+<div class="toolbar"><div><h2>活動管理</h2><p class="small">新增或修改後，Calendar 會直接讀取 Supabase 最新資料。</p></div><button id="newEventBtn" class="btn">＋ 新增活動</button></div>
+<div id="eventsMessage" class="message"></div>
+<div id="eventsList" class="events-grid"><div class="empty">正在讀取活動…</div></div>
+</article>
+</div>
 
-          <div id="adminMessage" class="message"></div>
-          <div id="registrationList" class="registration-list">
-            <div class="empty">請先選擇一個活動。</div>
-          </div>
-        </article>
-      </div>
-    </section>
-  </main>
+<div id="registrationsTab" hidden>
+<article class="card">
+<div class="toolbar">
+<div class="field" style="margin:0;min-width:280px"><label for="eventSelect">選擇活動</label><select id="eventSelect"><option value="">請選擇活動</option></select></div>
+<button id="exportBtn" class="btn secondary" disabled>匯出 CSV</button>
+</div>
+<div id="summary" class="summary" hidden>
+<div class="summary-item"><div class="summary-label">報名單數</div><div id="registrationCount" class="summary-value">0</div></div>
+<div class="summary-item"><div class="summary-label">總參加人數</div><div id="participantCount" class="summary-value">0</div></div>
+<div class="summary-item"><div class="summary-label">活動總名額</div><div id="capacityCount" class="summary-value">0</div></div>
+</div>
+<div id="adminMessage" class="message"></div>
+<div id="registrationList" class="registration-list"><div class="empty">請先選擇一個活動。</div></div>
+</article>
+</div>
 
-  <footer>
-    <div class="wrap">© 2026 瑋瑋老師的撒野記事錄 · Admin Page</div>
-  </footer>
+<div id="eventFormWrap" hidden style="margin-top:18px">
+<article class="card">
+<div class="toolbar"><h2 id="eventFormTitle">新增活動</h2><button id="cancelEventBtn" class="btn secondary">取消</button></div>
+<form id="eventForm">
+<input id="eventId" type="hidden">
+<div class="form-grid">
+<div class="field full"><label for="title">活動名稱</label><input id="title" required maxlength="200"></div>
+<div class="field"><label for="eventDate">日期</label><input id="eventDate" type="date" required></div>
+<div class="field"><label for="status">報名狀態</label><select id="status"><option value="open">open｜開放報名</option><option value="closed">closed｜關閉報名</option></select></div>
+<div class="field"><label for="startTime">開始時間</label><input id="startTime" type="time"></div>
+<div class="field"><label for="endTime">結束時間</label><input id="endTime" type="time"></div>
+<div class="field"><label for="location">地點</label><input id="location" maxlength="200"></div>
+<div class="field"><label for="capacity">總名額</label><input id="capacity" type="number" min="0" required value="0"></div>
+<div class="field"><label for="price">費用</label><input id="price" type="number" min="0" value="0"></div>
+<div class="field full"><label for="description">活動說明</label><textarea id="description"></textarea></div>
+</div>
+<button id="saveEventBtn" class="btn" type="submit">儲存活動</button>
+</form>
+<div id="eventFormMessage" class="message"></div>
+</article>
+</div>
+
+</div></section>
+</main>
+
+<footer><div class="wrap">© 2026 瑋瑋老師的撒野記事錄 · Admin Page</div></footer>
 
 <script>
 const SUPABASE_URL="https://aexhjnpskprtvpqbxriy.supabase.co";
 const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFleGhqbnBza3BydHZwcWJ4cml5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYzMzExMjEsImV4cCI6MjEwMTkwNzEyMX0.sMiJ1m8BptiVgCjK43-3cXNLzDto49T8vsNt3ulDNmU";
 const client=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 
-const loginSection=document.getElementById("loginSection");
-const adminSection=document.getElementById("adminSection");
-const loginForm=document.getElementById("loginForm");
-const loginBtn=document.getElementById("loginBtn");
-const loginMessage=document.getElementById("loginMessage");
-const loginUser=document.getElementById("loginUser");
-const logoutBtn=document.getElementById("logoutBtn");
-const eventSelect=document.getElementById("eventSelect");
-const registrationList=document.getElementById("registrationList");
-const adminMessage=document.getElementById("adminMessage");
-const summary=document.getElementById("summary");
-const exportBtn=document.getElementById("exportBtn");
+const $=id=>document.getElementById(id);
+let eventsCache=[],currentEvent=null,currentRegistrations=[];
 
-let currentEvent=null;
-let currentRegistrations=[];
-
-function setMessage(el,message,type){
-  el.textContent=message;
-  el.className=`message ${type}`;
-}
-function clearMessage(el){el.textContent="";el.className="message"}
-function formatDate(s){
-  if(!s)return"—";
-  const d=new Date(s+"T00:00:00");
-  return new Intl.DateTimeFormat("zh-TW",{year:"numeric",month:"2-digit",day:"2-digit"}).format(d);
-}
-function formatDateTime(s){
-  if(!s)return"—";
-  return new Intl.DateTimeFormat("zh-TW",{
-    year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"
-  }).format(new Date(s));
-}
-function escapeHtml(value){
-  return String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
-}
+function msg(el,text,type){el.textContent=text;el.className=`message ${type}`}
+function clearMsg(el){el.textContent="";el.className="message"}
+function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]))}
+function dateText(s){if(!s)return"—";const [y,m,d]=s.split("-");return `${y}/${m}/${d}`}
+function dateTimeText(s){return s?new Intl.DateTimeFormat("zh-TW",{year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}).format(new Date(s)):"—"}
+function timeText(s){return s?s.slice(0,5):""}
 
 async function applySession(session){
   if(session?.user){
-    loginSection.hidden=true;
-    adminSection.hidden=false;
-    logoutBtn.hidden=false;
-    loginUser.textContent=session.user.email||"已登入";
+    $("loginSection").hidden=true;$("adminSection").hidden=false;$("logoutBtn").hidden=false;$("loginUser").textContent=session.user.email||"已登入";
     await loadEvents();
   }else{
-    loginSection.hidden=false;
-    adminSection.hidden=true;
-    logoutBtn.hidden=true;
-    loginUser.textContent="";
+    $("loginSection").hidden=false;$("adminSection").hidden=true;$("logoutBtn").hidden=true;$("loginUser").textContent="";
   }
 }
 
-loginForm.addEventListener("submit",async(e)=>{
-  e.preventDefault();
-  clearMessage(loginMessage);
-  loginBtn.disabled=true;
-  loginBtn.textContent="登入中…";
-
-  const email=document.getElementById("email").value.trim();
-  const password=document.getElementById("password").value;
-
-  const {data,error}=await client.auth.signInWithPassword({email,password});
-
-  loginBtn.disabled=false;
-  loginBtn.textContent="登入";
-
-  if(error){
-    console.error(error);
-    setMessage(loginMessage,"登入失敗，請確認 E-mail 與密碼。","error");
-    return;
-  }
+$("loginForm").addEventListener("submit",async e=>{
+  e.preventDefault();clearMsg($("loginMessage"));$("loginBtn").disabled=true;$("loginBtn").textContent="登入中…";
+  const {data,error}=await client.auth.signInWithPassword({email:$("email").value.trim(),password:$("password").value});
+  $("loginBtn").disabled=false;$("loginBtn").textContent="登入";
+  if(error){msg($("loginMessage"),"登入失敗，請確認 E-mail 與密碼。","error");return}
   await applySession(data.session);
 });
 
-logoutBtn.addEventListener("click",async()=>{
-  await client.auth.signOut();
-  eventSelect.innerHTML='<option value="">請選擇活動</option>';
-  registrationList.innerHTML='<div class="empty">請先登入。</div>';
-  summary.hidden=true;
-  currentRegistrations=[];
-  currentEvent=null;
-  await applySession(null);
+$("logoutBtn").onclick=async()=>{await client.auth.signOut();await applySession(null)};
+
+document.querySelectorAll(".tab-btn").forEach(btn=>btn.onclick=()=>{
+  document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));btn.classList.add("active");
+  const tab=btn.dataset.tab;$("eventsTab").hidden=tab!=="events";$("registrationsTab").hidden=tab!=="registrations";$("eventFormWrap").hidden=true;
 });
 
 async function loadEvents(){
-  clearMessage(adminMessage);
-  const {data,error}=await client
-    .from("events")
-    .select("id,title,event_date,capacity,status")
-    .order("event_date",{ascending:false})
-    .order("id",{ascending:false});
-
-  if(error){
-    console.error(error);
-    setMessage(adminMessage,"無法讀取活動。請確認管理員 RLS SQL 已執行。","error");
-    return;
-  }
-
-  eventSelect.innerHTML='<option value="">請選擇活動</option>';
-  for(const event of data){
-    const option=document.createElement("option");
-    option.value=event.id;
-    option.textContent=`#${event.id}｜${formatDate(event.event_date)}｜${event.title}`;
-    option.dataset.capacity=event.capacity;
-    option.dataset.title=event.title;
-    eventSelect.appendChild(option);
+  const {data,error}=await client.from("events").select("id,title,event_date,start_time,end_time,location,description,capacity,price,status").order("event_date",{ascending:false}).order("id",{ascending:false});
+  if(error){msg($("eventsMessage"),"無法讀取活動，請確認 RLS 權限。","error");return}
+  eventsCache=data||[];
+  renderEvents();
+  $("eventSelect").innerHTML='<option value="">請選擇活動</option>';
+  for(const e of eventsCache){
+    const o=document.createElement("option");o.value=e.id;o.textContent=`#${e.id}｜${dateText(e.event_date)}｜${e.title}`;o.dataset.capacity=e.capacity;o.dataset.title=e.title;$("eventSelect").appendChild(o);
   }
 }
 
-eventSelect.addEventListener("change",async()=>{
-  const eventId=Number(eventSelect.value);
-  if(!eventId){
-    currentEvent=null;
-    currentRegistrations=[];
-    summary.hidden=true;
-    exportBtn.disabled=true;
-    registrationList.innerHTML='<div class="empty">請先選擇一個活動。</div>';
-    return;
-  }
+async function getPublicStats(eventId){
+  const {data}=await client.rpc("get_event_public",{p_event_id:eventId});
+  return data&&data[0]?data[0]:null;
+}
 
-  const selected=eventSelect.options[eventSelect.selectedIndex];
-  currentEvent={
-    id:eventId,
-    title:selected.dataset.title,
-    capacity:Number(selected.dataset.capacity||0)
-  };
-  await loadRegistrations(eventId);
+async function renderEvents(){
+  $("eventsList").innerHTML='<div class="empty">正在整理活動資料…</div>';
+  const cards=[];
+  for(const e of eventsCache){
+    const stats=await getPublicStats(e.id);
+    const registered=stats?.registered??0,remaining=stats?.remaining??e.capacity;
+    cards.push(`
+      <article class="event-card">
+        <div class="event-head">
+          <div><h3>#${e.id}｜${esc(e.title)}</h3><div class="small">${dateText(e.event_date)} ${timeText(e.start_time)}${e.end_time?`–${timeText(e.end_time)}`:""}｜${esc(e.location||"未填地點")}</div></div>
+          <span class="status ${e.status==="open"?"open":"closed"}">${e.status==="open"?"開放報名":"關閉報名"}</span>
+        </div>
+        <div class="event-meta">
+          <div class="meta-box"><div class="meta-label">總名額</div><div class="meta-value">${e.capacity}</div></div>
+          <div class="meta-box"><div class="meta-label">已報名</div><div class="meta-value">${registered}</div></div>
+          <div class="meta-box"><div class="meta-label">剩餘</div><div class="meta-value">${remaining}</div></div>
+          <div class="meta-box"><div class="meta-label">費用</div><div class="meta-value">${Number(e.price)>0?`NT$ ${Number(e.price).toLocaleString("zh-TW")}`:"—"}</div></div>
+        </div>
+        <div class="actions">
+          <button class="btn secondary" onclick="editEvent(${e.id})">編輯活動</button>
+          <button class="btn secondary" onclick="openRegistrations(${e.id})">查看名單</button>
+          <button class="btn ${e.status==="open"?"danger":"secondary"}" onclick="toggleStatus(${e.id},'${e.status}')">${e.status==="open"?"關閉報名":"重新開放"}</button>
+        </div>
+      </article>`);
+  }
+  $("eventsList").innerHTML=cards.length?cards.join(""):'<div class="empty">目前沒有活動。</div>';
+}
+
+$("newEventBtn").onclick=()=>openEventForm();
+$("cancelEventBtn").onclick=()=>{$("eventFormWrap").hidden=true;clearMsg($("eventFormMessage"))};
+
+function openEventForm(e=null){
+  $("eventFormWrap").hidden=false;$("eventFormTitle").textContent=e?"編輯活動":"新增活動";$("eventId").value=e?.id||"";
+  $("title").value=e?.title||"";$("eventDate").value=e?.event_date||"";$("startTime").value=timeText(e?.start_time);$("endTime").value=timeText(e?.end_time);
+  $("location").value=e?.location||"";$("capacity").value=e?.capacity??0;$("price").value=e?.price??0;$("status").value=e?.status||"open";$("description").value=e?.description||"";
+  clearMsg($("eventFormMessage"));$("eventFormWrap").scrollIntoView({behavior:"smooth"});
+}
+
+window.editEvent=id=>{const e=eventsCache.find(x=>x.id===id);if(e)openEventForm(e)};
+
+$("eventForm").addEventListener("submit",async e=>{
+  e.preventDefault();clearMsg($("eventFormMessage"));$("saveEventBtn").disabled=true;$("saveEventBtn").textContent="儲存中…";
+  const payload={title:$("title").value.trim(),event_date:$("eventDate").value,start_time:$("startTime").value||null,end_time:$("endTime").value||null,location:$("location").value.trim()||null,description:$("description").value.trim()||null,capacity:Number($("capacity").value),price:Number($("price").value||0),status:$("status").value};
+  const id=Number($("eventId").value);let result;
+  if(id){result=await client.from("events").update(payload).eq("id",id)}else{result=await client.from("events").insert(payload)}
+  $("saveEventBtn").disabled=false;$("saveEventBtn").textContent="儲存活動";
+  if(result.error){msg($("eventFormMessage"),result.error.message||"儲存失敗。","error");return}
+  msg($("eventFormMessage"),id?"活動已更新。":"活動已新增。","success");await loadEvents();setTimeout(()=>{$("eventFormWrap").hidden=true},600);
+});
+
+window.toggleStatus=async(id,status)=>{
+  const next=status==="open"?"closed":"open";
+  const {error}=await client.from("events").update({status:next}).eq("id",id);
+  if(error){msg($("eventsMessage"),error.message||"狀態更新失敗。","error");return}
+  await loadEvents();
+};
+
+window.openRegistrations=async id=>{
+  document.querySelectorAll(".tab-btn").forEach(b=>b.classList.toggle("active",b.dataset.tab==="registrations"));
+  $("eventsTab").hidden=true;$("registrationsTab").hidden=false;$("eventFormWrap").hidden=true;$("eventSelect").value=id;await loadRegistrations(id);
+};
+
+$("eventSelect").addEventListener("change",async()=>{
+  const id=Number($("eventSelect").value);
+  if(!id){currentEvent=null;currentRegistrations=[];$("summary").hidden=true;$("exportBtn").disabled=true;$("registrationList").innerHTML='<div class="empty">請先選擇一個活動。</div>';return}
+  await loadRegistrations(id);
 });
 
 async function loadRegistrations(eventId){
-  clearMessage(adminMessage);
-  registrationList.innerHTML='<div class="empty">正在讀取報名資料…</div>';
-
-  const {data,error}=await client
-    .from("registrations")
-    .select(`
-      id,
-      event_id,
-      name,
-      phone,
-      email,
-      line_id,
-      quantity,
-      status,
-      created_at,
-      participants (
-        id,
-        name,
-        birthday
-      )
-    `)
-    .eq("event_id",eventId)
-    .order("created_at",{ascending:true});
-
-  if(error){
-    console.error(error);
-    setMessage(adminMessage,"無法讀取報名資料。請確認管理員登入與 RLS 權限。","error");
-    registrationList.innerHTML="";
-    summary.hidden=true;
-    exportBtn.disabled=true;
-    return;
-  }
-
-  currentRegistrations=data||[];
-  renderRegistrations();
+  const event=eventsCache.find(e=>e.id===eventId);currentEvent=event||null;
+  $("registrationList").innerHTML='<div class="empty">正在讀取報名資料…</div>';
+  const {data,error}=await client.from("registrations").select(`id,event_id,name,phone,email,line_id,quantity,status,created_at,participants(id,name,birthday)`).eq("event_id",eventId).order("created_at",{ascending:true});
+  if(error){msg($("adminMessage"),"無法讀取報名資料。","error");return}
+  currentRegistrations=data||[];renderRegistrations();
 }
 
 function renderRegistrations(){
   const valid=currentRegistrations.filter(r=>["confirmed","pending"].includes(r.status));
-  const participantTotal=valid.reduce((sum,r)=>sum+Number(r.quantity||0),0);
-
-  document.getElementById("registrationCount").textContent=currentRegistrations.length;
-  document.getElementById("participantCount").textContent=participantTotal;
-  document.getElementById("capacityCount").textContent=currentEvent?.capacity??0;
-  summary.hidden=false;
-  exportBtn.disabled=currentRegistrations.length===0;
-
-  if(currentRegistrations.length===0){
-    registrationList.innerHTML='<div class="empty">這個活動目前沒有報名資料。</div>';
-    return;
-  }
-
-  registrationList.innerHTML=currentRegistrations.map(r=>{
-    const participants=(r.participants||[]).slice().sort((a,b)=>a.id-b.id);
-    const rows=participants.length
-      ? participants.map((p,i)=>`
-          <tr>
-            <td>${i+1}</td>
-            <td>${escapeHtml(p.name)}</td>
-            <td>${escapeHtml(formatDate(p.birthday))}</td>
-          </tr>`).join("")
-      : `<tr><td colspan="3">沒有參加者資料</td></tr>`;
-
-    return `
-      <article class="registration-card">
-        <div class="registration-head">
-          <div>
-            <h3>報名 #${r.id}｜${escapeHtml(r.name)}</h3>
-            <div class="small">建立時間：${escapeHtml(formatDateTime(r.created_at))}</div>
-          </div>
-          <div>
-            <span class="status">${escapeHtml(r.status)}</span>
-            <span class="small">　${r.quantity} 人</span>
-          </div>
-        </div>
-
-        <div class="registration-body">
-          <div class="contact-grid">
-            <div>
-              <div class="meta-label">聯絡人</div>
-              <div class="meta-value">${escapeHtml(r.name)}</div>
-            </div>
-            <div>
-              <div class="meta-label">電話</div>
-              <div class="meta-value">${escapeHtml(r.phone)}</div>
-            </div>
-            <div>
-              <div class="meta-label">E-mail</div>
-              <div class="meta-value">${escapeHtml(r.email)}</div>
-            </div>
-            <div>
-              <div class="meta-label">LINE ID</div>
-              <div class="meta-value">${escapeHtml(r.line_id||"—")}</div>
-            </div>
-          </div>
-
-          <h3>參加者</h3>
-          <table class="participants-table">
-            <thead><tr><th>#</th><th>姓名</th><th>生日</th></tr></thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </div>
-      </article>`;
+  const total=valid.reduce((s,r)=>s+Number(r.quantity||0),0);
+  $("registrationCount").textContent=currentRegistrations.length;$("participantCount").textContent=total;$("capacityCount").textContent=currentEvent?.capacity??0;$("summary").hidden=false;$("exportBtn").disabled=!currentRegistrations.length;
+  if(!currentRegistrations.length){$("registrationList").innerHTML='<div class="empty">這個活動目前沒有報名資料。</div>';return}
+  $("registrationList").innerHTML=currentRegistrations.map(r=>{
+    const ps=(r.participants||[]).slice().sort((a,b)=>a.id-b.id);
+    const rows=ps.length?ps.map((p,i)=>`<tr><td>${i+1}</td><td>${esc(p.name)}</td><td>${dateText(p.birthday)}</td></tr>`).join(""):`<tr><td colspan="3">沒有參加者資料</td></tr>`;
+    return `<article class="registration-card"><div class="registration-head"><div><h3>報名 #${r.id}｜${esc(r.name)}</h3><div class="small">建立時間：${dateTimeText(r.created_at)}</div></div><div><span class="status open">${esc(r.status)}</span>　<span class="small">${r.quantity} 人</span></div></div>
+    <div class="registration-body"><div class="contact-grid"><div><div class="meta-label">聯絡人</div><div>${esc(r.name)}</div></div><div><div class="meta-label">電話</div><div>${esc(r.phone)}</div></div><div><div class="meta-label">E-mail</div><div>${esc(r.email)}</div></div><div><div class="meta-label">LINE ID</div><div>${esc(r.line_id||"—")}</div></div></div>
+    <h3>參加者</h3><table class="participants-table"><thead><tr><th>#</th><th>姓名</th><th>生日</th></tr></thead><tbody>${rows}</tbody></table></div></article>`;
   }).join("");
 }
 
-exportBtn.addEventListener("click",()=>{
+$("exportBtn").onclick=()=>{
   if(!currentRegistrations.length)return;
-
   const rows=[["活動ID","活動名稱","報名編號","報名時間","狀態","聯絡人","電話","Email","LINE ID","報名人數","參加者姓名","生日"]];
-
   for(const r of currentRegistrations){
     const ps=(r.participants||[]).slice().sort((a,b)=>a.id-b.id);
-    if(ps.length===0){
-      rows.push([currentEvent.id,currentEvent.title,r.id,r.created_at,r.status,r.name,r.phone,r.email,r.line_id||"",r.quantity,"",""]);
-    }else{
-      for(const p of ps){
-        rows.push([currentEvent.id,currentEvent.title,r.id,r.created_at,r.status,r.name,r.phone,r.email,r.line_id||"",r.quantity,p.name,p.birthday||""]);
-      }
-    }
+    if(!ps.length)rows.push([currentEvent.id,currentEvent.title,r.id,r.created_at,r.status,r.name,r.phone,r.email,r.line_id||"",r.quantity,"",""]);
+    else for(const p of ps)rows.push([currentEvent.id,currentEvent.title,r.id,r.created_at,r.status,r.name,r.phone,r.email,r.line_id||"",r.quantity,p.name,p.birthday||""]);
   }
-
   const csv="\uFEFF"+rows.map(row=>row.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("\r\n");
-  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement("a");
-  a.href=url;
-  a.download=`event_${currentEvent.id}_registrations.csv`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-});
+  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download=`event_${currentEvent.id}_registrations.csv`;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+};
 
-(async()=>{
-  const {data}=await client.auth.getSession();
-  await applySession(data.session);
-})();
+(async()=>{const {data}=await client.auth.getSession();await applySession(data.session)})();
 </script>
 </body>
 </html>
