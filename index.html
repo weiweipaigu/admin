@@ -47,7 +47,7 @@
     .participant-edit-list{display:grid;gap:10px}
     .participant-edit-card{padding:12px;border:1px solid var(--line);border-radius:14px;background:#fbfbf8}
     .participant-edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    .message{display:none;margin:14px 0;padding:12px 14px;border-radius:14px}.message.error{display:block;background:var(--danger-soft);color:var(--danger)}.message.success{display:block;background:var(--success-soft);color:var(--success)}
+    .email-preview{background:#fbfbf8;border:1px solid var(--line);border-radius:16px;padding:18px}.email-preview h3{margin-top:18px}.email-preview h3:first-child{margin-top:0}.email-hint{font-size:.86rem;color:var(--muted);margin-top:5px}.message{display:none;margin:14px 0;padding:12px 14px;border-radius:14px}.message.error{display:block;background:var(--danger-soft);color:var(--danger)}.message.success{display:block;background:var(--success-soft);color:var(--success)}
     .empty{padding:28px;text-align:center;color:var(--muted)}[hidden]{display:none!important}
     footer{padding:18px 0 46px;color:var(--muted);font-size:.9rem}
     @media(max-width:800px){.nav-inner,.registration-head{flex-direction:column;align-items:flex-start}.event-meta{grid-template-columns:repeat(2,1fr)}.form-grid,.contact-grid,.summary,.participant-edit-grid{grid-template-columns:1fr}}
@@ -72,6 +72,7 @@
 <div class="tabs">
 <button class="tab-btn active" data-tab="events">活動管理</button>
 <button class="tab-btn" data-tab="registrations">報名資料</button>
+<button class="tab-btn" data-tab="email">確認信設定</button>
 </div>
 
 <div id="eventsTab">
@@ -123,6 +124,77 @@
   </form>
   <div id="registrationEditMessage" class="message"></div>
 </div>
+</article>
+</div>
+
+<div id="emailTab" hidden>
+<article class="card">
+  <div class="toolbar">
+    <div>
+      <h2>確認信設定</h2>
+      <p class="small">報名成功後會由 Gmail API 自動寄出。活動與報名資料由系統帶入，以下文字可隨時修改。</p>
+    </div>
+  </div>
+  <div id="emailSettingsMessage" class="message"></div>
+  <form id="emailSettingsForm">
+    <div class="form-grid">
+      <div class="field full">
+        <label style="display:flex;gap:10px;align-items:center">
+          <input id="emailEnabled" type="checkbox" style="width:auto">
+          啟用「新報名自動寄送確認信」
+        </label>
+      </div>
+
+      <div class="field">
+        <label for="emailSenderName">寄件者顯示名稱</label>
+        <input id="emailSenderName" required maxlength="100">
+      </div>
+      <div class="field">
+        <label for="emailSubject">Email 主旨</label>
+        <input id="emailSubject" required maxlength="200">
+        <div class="email-hint">可使用：{{event_title}}、{{registration_id}}、{{contact_name}}</div>
+      </div>
+
+      <div class="field full">
+        <label for="emailIntro">開頭文字</label>
+        <textarea id="emailIntro" required></textarea>
+      </div>
+
+      <div class="field">
+        <label for="eventSectionTitle">活動區塊標題</label>
+        <input id="eventSectionTitle" required>
+      </div>
+      <div class="field">
+        <label for="registrationSectionTitle">報名資料區塊標題</label>
+        <input id="registrationSectionTitle" required>
+      </div>
+
+      <div class="field">
+        <label for="paymentSectionTitle">匯款區塊標題</label>
+        <input id="paymentSectionTitle" required>
+      </div>
+      <div class="field">
+        <label for="contactSectionTitle">聯絡方式區塊標題</label>
+        <input id="contactSectionTitle" required>
+      </div>
+
+      <div class="field full">
+        <label for="paymentInfo">匯款資訊</label>
+        <textarea id="paymentInfo" required></textarea>
+      </div>
+
+      <div class="field full">
+        <label for="contactInfo">聯絡方式</label>
+        <textarea id="contactInfo" required></textarea>
+      </div>
+
+      <div class="field full">
+        <label for="footerText">信件結尾</label>
+        <textarea id="footerText" required></textarea>
+      </div>
+    </div>
+    <button id="saveEmailSettingsBtn" class="btn" type="submit">儲存確認信設定</button>
+  </form>
 </article>
 </div>
 
@@ -187,9 +259,14 @@ $("loginForm").addEventListener("submit",async e=>{
 
 $("logoutBtn").onclick=async()=>{await client.auth.signOut();await applySession(null)};
 
-document.querySelectorAll(".tab-btn").forEach(btn=>btn.onclick=()=>{
+document.querySelectorAll(".tab-btn").forEach(btn=>btn.onclick=async()=>{
   document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));btn.classList.add("active");
-  const tab=btn.dataset.tab;$("eventsTab").hidden=tab!=="events";$("registrationsTab").hidden=tab!=="registrations";$("eventFormWrap").hidden=true;
+  const tab=btn.dataset.tab;
+  $("eventsTab").hidden=tab!=="events";
+  $("registrationsTab").hidden=tab!=="registrations";
+  $("emailTab").hidden=tab!=="email";
+  $("eventFormWrap").hidden=true;
+  if(tab==="email") await loadEmailSettings();
 });
 
 async function loadEvents(){
@@ -292,7 +369,7 @@ window.deleteEvent=async id=>{
 
 window.openRegistrations=async id=>{
   document.querySelectorAll(".tab-btn").forEach(b=>b.classList.toggle("active",b.dataset.tab==="registrations"));
-  $("eventsTab").hidden=true;$("registrationsTab").hidden=false;$("eventFormWrap").hidden=true;$("eventSelect").value=id;await loadRegistrations(id);
+  $("eventsTab").hidden=true;$("registrationsTab").hidden=false;$("emailTab").hidden=true;$("eventFormWrap").hidden=true;$("eventSelect").value=id;await loadRegistrations(id);
 };
 
 $("eventSelect").addEventListener("change",async()=>{
@@ -306,7 +383,24 @@ async function loadRegistrations(eventId){
   $("registrationList").innerHTML='<div class="empty">正在讀取報名資料…</div>';
   const {data,error}=await client.from("registrations").select(`id,event_id,name,phone,email,line_id,quantity,status,created_at,participants(id,name,birthday)`).eq("event_id",eventId).order("created_at",{ascending:true});
   if(error){msg($("adminMessage"),"無法讀取報名資料。","error");return}
-  currentRegistrations=data||[];renderRegistrations();
+
+  currentRegistrations=data||[];
+
+  if(currentRegistrations.length){
+    const ids=currentRegistrations.map(r=>r.id);
+    const {data:logs}=await client.from("email_logs")
+      .select("registration_id,status,recipient,error_message,is_manual,created_at")
+      .in("registration_id",ids)
+      .order("created_at",{ascending:false});
+
+    const latest=new Map();
+    for(const log of (logs||[])){
+      if(!latest.has(log.registration_id))latest.set(log.registration_id,log);
+    }
+    currentRegistrations=currentRegistrations.map(r=>({...r,email_log:latest.get(r.id)||null}));
+  }
+
+  renderRegistrations();
 }
 
 function renderRegistrations(){
@@ -347,6 +441,16 @@ function renderRegistrations(){
           <div><div class="meta-label">E-mail</div><div>${esc(r.email)}</div></div>
           <div><div class="meta-label">LINE ID</div><div>${esc(r.line_id||"—")}</div></div>
         </div>
+        <div style="margin:10px 0 14px">
+          <div class="meta-label">確認信狀態</div>
+          <div>${r.email_log
+            ? (r.email_log.status==="sent"
+                ? `已寄送｜${dateTimeText(r.email_log.created_at)}${r.email_log.is_manual?"（人工重寄）":""}`
+                : r.email_log.status==="failed"
+                  ? `寄送失敗｜${dateTimeText(r.email_log.created_at)}`
+                  : `未自動寄送｜${dateTimeText(r.email_log.created_at)}`)
+            : "尚無寄送紀錄"}</div>
+        </div>
         <h3>參加者</h3>
         <table class="participants-table">
           <thead><tr><th>#</th><th>姓名</th><th>生日</th></tr></thead>
@@ -354,6 +458,7 @@ function renderRegistrations(){
         </table>
         <div class="registration-actions">
           <button class="btn secondary" type="button" onclick="editRegistration(${r.id})">編輯</button>
+          <button class="btn secondary" type="button" onclick="resendConfirmation(${r.id})">重新寄送確認信</button>
           ${r.status==="cancelled"
             ? `<button class="btn secondary" type="button" onclick="restoreRegistration(${r.id})">恢復報名</button>`
             : `<button class="btn danger" type="button" onclick="cancelRegistration(${r.id})">取消報名</button>`}
@@ -498,6 +603,78 @@ window.deleteRegistration=async id=>{
   $("registrationEditWrap").hidden=true;
   await loadRegistrations(currentEvent.id);
   await loadEvents();
+};
+
+
+async function loadEmailSettings(){
+  clearMsg($("emailSettingsMessage"));
+  const {data,error}=await client.from("email_settings").select("*").eq("id",1).single();
+  if(error){
+    msg($("emailSettingsMessage"),"無法讀取確認信設定，請先執行 Phase 5 SQL。","error");
+    return;
+  }
+  $("emailEnabled").checked=!!data.enabled;
+  $("emailSenderName").value=data.sender_name||"";
+  $("emailSubject").value=data.subject_template||"";
+  $("emailIntro").value=data.intro_text||"";
+  $("eventSectionTitle").value=data.event_section_title||"";
+  $("registrationSectionTitle").value=data.registration_section_title||"";
+  $("paymentSectionTitle").value=data.payment_section_title||"";
+  $("paymentInfo").value=data.payment_info||"";
+  $("contactSectionTitle").value=data.contact_section_title||"";
+  $("contactInfo").value=data.contact_info||"";
+  $("footerText").value=data.footer_text||"";
+}
+
+$("emailSettingsForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  clearMsg($("emailSettingsMessage"));
+  $("saveEmailSettingsBtn").disabled=true;
+  $("saveEmailSettingsBtn").textContent="儲存中…";
+
+  const payload={
+    enabled:$("emailEnabled").checked,
+    sender_name:$("emailSenderName").value.trim(),
+    subject_template:$("emailSubject").value.trim(),
+    intro_text:$("emailIntro").value.trim(),
+    event_section_title:$("eventSectionTitle").value.trim(),
+    registration_section_title:$("registrationSectionTitle").value.trim(),
+    payment_section_title:$("paymentSectionTitle").value.trim(),
+    payment_info:$("paymentInfo").value.trim(),
+    contact_section_title:$("contactSectionTitle").value.trim(),
+    contact_info:$("contactInfo").value.trim(),
+    footer_text:$("footerText").value.trim(),
+    updated_at:new Date().toISOString()
+  };
+
+  const {error}=await client.from("email_settings").update(payload).eq("id",1);
+
+  $("saveEmailSettingsBtn").disabled=false;
+  $("saveEmailSettingsBtn").textContent="儲存確認信設定";
+
+  if(error){
+    msg($("emailSettingsMessage"),error.message||"儲存失敗。","error");
+    return;
+  }
+  msg($("emailSettingsMessage"),"確認信設定已儲存；之後的新報名會套用最新內容。","success");
+});
+
+window.resendConfirmation=async id=>{
+  const r=currentRegistrations.find(x=>x.id===id);
+  if(!r)return;
+  if(!confirm(`確定要重新寄送報名 #${id} 的確認信到：\n${r.email}\n\n信件會使用目前 Admin 的最新確認信設定。`))return;
+
+  msg($("adminMessage"),"正在重新寄送確認信…","success");
+  const {data,error}=await client.functions.invoke("send-confirmation-email",{
+    body:{registration_id:id}
+  });
+
+  if(error || !data?.ok){
+    console.error(error,data);
+    msg($("adminMessage"),data?.error||error?.message||"確認信寄送失敗。","error");
+    return;
+  }
+  msg($("adminMessage"),`確認信已重新寄送至 ${r.email}。`,"success");
 };
 
 $("exportBtn").onclick=()=>{
