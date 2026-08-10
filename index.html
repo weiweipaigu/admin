@@ -34,7 +34,7 @@
     .events-grid{display:grid;gap:14px}.event-card{border:1px solid var(--line);border-radius:18px;padding:16px;background:#fbfbf8}
     .event-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap}.event-meta{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px}
     .meta-box{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px}.meta-label{font-size:.8rem;color:var(--muted)}.meta-value{font-weight:700}
-    .status{display:inline-block;padding:5px 10px;border-radius:999px;font-size:.84rem;font-weight:700}.status.open{background:var(--success-soft);color:var(--success)}.status.closed{background:var(--danger-soft);color:var(--danger)}
+    .status{display:inline-block;padding:5px 10px;border-radius:999px;font-size:.84rem;font-weight:700}.status.open{background:var(--success-soft);color:var(--success)}.status.closed{background:var(--danger-soft);color:var(--danger)}.status.archived{background:#eceae5;color:#6d6a62}
     .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
     .form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}.full{grid-column:1/-1}
     .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px}.summary-item{background:#fbfbf8;border:1px solid var(--line);border-radius:14px;padding:14px}.summary-label{font-size:.86rem;color:var(--muted)}.summary-value{font-size:1.35rem;font-weight:700}
@@ -134,7 +134,7 @@
 <div class="form-grid">
 <div class="field full"><label for="title">活動名稱</label><input id="title" required maxlength="200"></div>
 <div class="field"><label for="eventDate">日期</label><input id="eventDate" type="date" required></div>
-<div class="field"><label for="status">報名狀態</label><select id="status"><option value="open">open｜開放報名</option><option value="closed">closed｜關閉報名</option></select></div>
+<div class="field"><label for="status">報名狀態</label><select id="status"><option value="open">open｜開放報名</option><option value="closed">closed｜關閉報名</option><option value="archived">archived｜封存</option></select></div>
 <div class="field"><label for="startTime">開始時間</label><input id="startTime" type="time"></div>
 <div class="field"><label for="endTime">結束時間</label><input id="endTime" type="time"></div>
 <div class="field"><label for="location">地點</label><input id="location" maxlength="200"></div>
@@ -218,7 +218,7 @@ async function renderEvents(){
       <article class="event-card">
         <div class="event-head">
           <div><h3>#${e.id}｜${esc(e.title)}</h3><div class="small">${dateText(e.event_date)} ${timeText(e.start_time)}${e.end_time?`–${timeText(e.end_time)}`:""}｜${esc(e.location||"未填地點")}</div></div>
-          <span class="status ${e.status==="open"?"open":"closed"}">${e.status==="open"?"開放報名":"關閉報名"}</span>
+          <span class="status ${e.status==="open"?"open":e.status==="archived"?"archived":"closed"}">${e.status==="open"?"開放報名":e.status==="archived"?"已封存":"關閉報名"}</span>
         </div>
         <div class="event-meta">
           <div class="meta-box"><div class="meta-label">總名額</div><div class="meta-value">${e.capacity}</div></div>
@@ -229,7 +229,11 @@ async function renderEvents(){
         <div class="actions">
           <button class="btn secondary" onclick="editEvent(${e.id})">編輯活動</button>
           <button class="btn secondary" onclick="openRegistrations(${e.id})">查看名單</button>
-          <button class="btn ${e.status==="open"?"danger":"secondary"}" onclick="toggleStatus(${e.id},'${e.status}')">${e.status==="open"?"關閉報名":"重新開放"}</button>
+          ${e.status==="archived"
+            ? `<button class="btn secondary" onclick="unarchiveEvent(${e.id})">解除封存</button>`
+            : `<button class="btn ${e.status==="open"?"danger":"secondary"}" onclick="toggleStatus(${e.id},'${e.status}')">${e.status==="open"?"關閉報名":"重新開放"}</button>
+               <button class="btn secondary" onclick="archiveEvent(${e.id})">封存活動</button>`}
+          <button class="btn danger" onclick="deleteEvent(${e.id})">永久刪除</button>
         </div>
       </article>`);
   }
@@ -262,6 +266,27 @@ window.toggleStatus=async(id,status)=>{
   const next=status==="open"?"closed":"open";
   const {error}=await client.from("events").update({status:next}).eq("id",id);
   if(error){msg($("eventsMessage"),error.message||"狀態更新失敗。","error");return}
+  await loadEvents();
+};
+window.archiveEvent=async id=>{
+  const e=eventsCache.find(x=>x.id===id);
+  if(!confirm(`確定要封存活動 #${id}「${e?.title||""}」嗎？\n封存後 Calendar 不再顯示，但歷史報名資料會保留。`))return;
+  const {error}=await client.rpc("admin_archive_event",{p_event_id:id});
+  if(error){msg($("eventsMessage"),error.message||"封存失敗。","error");return}
+  await loadEvents();
+};
+window.unarchiveEvent=async id=>{
+  if(!confirm(`確定要解除封存活動 #${id} 嗎？解除後會恢復為開放報名。`))return;
+  const {error}=await client.rpc("admin_unarchive_event",{p_event_id:id});
+  if(error){msg($("eventsMessage"),error.message||"解除封存失敗。","error");return}
+  await loadEvents();
+};
+window.deleteEvent=async id=>{
+  const e=eventsCache.find(x=>x.id===id);
+  if(!confirm(`確定要永久刪除活動 #${id}「${e?.title||""}」嗎？\n只有完全沒有報名資料的活動才能刪除，且無法復原。`))return;
+  const {error}=await client.rpc("admin_delete_event",{p_event_id:id});
+  if(error){msg($("eventsMessage"),error.message||"刪除失敗。","error");return}
+  msg($("eventsMessage"),`活動 #${id} 已永久刪除。`,"success");
   await loadEvents();
 };
 
