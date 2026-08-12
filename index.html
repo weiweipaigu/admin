@@ -45,6 +45,12 @@
     .participants-table{width:100%;border-collapse:collapse}.participants-table th,.participants-table td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line)}.participants-table th{color:var(--muted);font-size:.86rem}
     .registration-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
     .status.cancelled{background:var(--danger-soft);color:var(--danger)}
+    .status.pending{background:var(--warn-soft);color:var(--warn)}
+    .status.waitlisted{background:#f4efe2;color:#7a6236}
+    .due-box{border:1px solid var(--line);border-radius:12px;padding:11px 12px;margin:10px 0 14px;background:#fbfbf8}
+    .due-box.due-soon{background:var(--warn-soft);border-color:#ead9ad;color:var(--warn)}
+    .due-box.overdue{background:var(--danger-soft);border-color:#ebcccc;color:var(--danger)}
+    .due-title{font-weight:800}
     .type-chip{display:inline-flex;align-items:center;padding:4px 9px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-size:.8rem;font-weight:700;margin-top:7px}
     .public-ref{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow-wrap:anywhere;font-size:.88rem}
     .note-box{white-space:pre-wrap;background:#fbfbf8;border:1px solid var(--line);border-radius:12px;padding:12px;margin:10px 0 14px}
@@ -55,7 +61,7 @@
     .payment-select.unpaid{background:var(--warn-soft);color:var(--warn);border-color:#ead9ad}
     .payment-select.paid{background:var(--success-soft);color:var(--success);border-color:#cfe0d2}
     .payment-select.refunded{background:#eceae5;color:#6d6a62;border-color:#d9d5cb}
-    .summary{grid-template-columns:repeat(4,1fr)}
+    .summary{grid-template-columns:repeat(5,1fr)}
     .tabs{overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none}
     .tabs::-webkit-scrollbar{display:none}
     .tab-btn{white-space:nowrap;flex:0 0 auto}
@@ -123,6 +129,7 @@
 <div class="summary-item"><div class="summary-label">有效報名單數</div><div id="registrationCount" class="summary-value">0</div></div>
 <div class="summary-item"><div class="summary-label">有效參加人數</div><div id="participantCount" class="summary-value">0</div></div>
 <div class="summary-item"><div class="summary-label">剩餘名額</div><div id="remainingCount" class="summary-value">0</div></div>
+<div class="summary-item"><div class="summary-label">備取組數</div><div id="waitlistCount" class="summary-value">0</div></div>
 <div class="summary-item"><div class="summary-label">活動總名額</div><div id="capacityCount" class="summary-value">0</div></div>
 </div>
 <div id="adminMessage" class="message"></div>
@@ -285,11 +292,51 @@ function paymentStatusText(status){
 function paymentStatusClass(status){
   return status==="paid"?"paid":status==="refunded"?"refunded":"unpaid";
 }
+
+function registrationStatusInfo(status){
+  if(status==="confirmed")return {text:"已確認",className:"open"};
+  if(status==="pending")return {text:"待付款",className:"pending"};
+  if(status==="waitlisted")return {text:"備取",className:"waitlisted"};
+  if(status==="cancelled")return {text:"已取消",className:"cancelled"};
+  return {text:status||"未知",className:"archived"};
+}
+
+function paymentDueInfo(value){
+  if(!value)return null;
+
+  const due=new Date(value);
+  const now=new Date();
+  const diff=due.getTime()-now.getTime();
+  const day=24*60*60*1000;
+
+  if(diff>day){
+    return {
+      className:"",
+      text:`尚有 ${Math.ceil(diff/day)} 日`,
+      detail:`付款提醒期限：${dateTimeText(value)}`
+    };
+  }
+
+  if(diff>0){
+    return {
+      className:"due-soon",
+      text:"即將到期",
+      detail:`付款提醒期限：${dateTimeText(value)}`
+    };
+  }
+
+  const overdue=Math.floor(Math.abs(diff)/day);
+
+  return {
+    className:"overdue",
+    text:overdue<1?"已逾期（未滿 1 日）":`已逾期 ${overdue} 日`,
+    detail:`原付款提醒期限：${dateTimeText(value)}`
+  };
+}
 const DEFAULT_EVENT_DESCRIPTION=`參加者適齡:
 體能需求:
 交通難度:
 
-此為日間親子活動，費用為每位孩子600元，家長不另收費。因步道寬度有限，每組家庭以兩位家長陪同為限。
 ※本活動不含保險，請自行投保旅平險。
 ※完成報名後，於活動日一周前請假全額退費，一周內請假不退費，請自行尋找代課。`;
 
@@ -438,7 +485,7 @@ $("eventSelect").addEventListener("change",async()=>{
 async function loadRegistrations(eventId){
   const event=eventsCache.find(e=>e.id===eventId);currentEvent=event||null;
   $("registrationList").innerHTML='<div class="empty">正在讀取報名資料…</div>';
-  const {data,error}=await client.from("registrations").select(`id,event_id,name,phone,email,line_id,quantity,status,payment_status,created_at,public_reference,note,participants(id,name,birthday)`).eq("event_id",eventId).order("created_at",{ascending:true});
+  const {data,error}=await client.from("registrations").select(`id,event_id,name,phone,email,line_id,quantity,status,payment_status,payment_due_at,promoted_at,created_at,public_reference,note,participants(id,name,birthday)`).eq("event_id",eventId).order("created_at",{ascending:true});
   if(error){msg($("adminMessage"),"無法讀取報名資料。","error");return}
 
   currentRegistrations=data||[];
@@ -463,9 +510,11 @@ async function loadRegistrations(eventId){
 function renderRegistrations(){
   const valid=currentRegistrations.filter(r=>["confirmed","pending"].includes(r.status));
   const total=valid.reduce((s,r)=>s+Number(r.quantity||0),0);
+  const waitlisted=currentRegistrations.filter(r=>r.status==="waitlisted");
   $("registrationCount").textContent=valid.length;
   $("participantCount").textContent=total;
   $("remainingCount").textContent=Math.max(Number(currentEvent?.capacity||0)-total,0);
+  $("waitlistCount").textContent=waitlisted.length;
   $("capacityCount").textContent=currentEvent?.capacity??0;
   $("summary").hidden=false;
   $("exportBtn").disabled=!currentRegistrations.length;
@@ -481,8 +530,13 @@ function renderRegistrations(){
       ? ps.map((p,i)=>`<tr><td>${i+1}</td><td>${esc(p.name)}</td><td>${dateText(p.birthday)}</td></tr>`).join("")
       : `<tr><td colspan="3">沒有參加者資料</td></tr>`;
 
-    const statusClass=r.status==="cancelled"?"cancelled":"open";
-    const statusText=r.status==="cancelled"?"已取消":r.status;
+    const statusInfo=registrationStatusInfo(r.status);
+    const statusClass=statusInfo.className;
+    const statusText=statusInfo.text;
+    const dueInfo=r.status==="pending"?paymentDueInfo(r.payment_due_at):null;
+    const waitlistPosition=r.status==="waitlisted"
+      ? currentRegistrations.filter(x=>x.status==="waitlisted" && x.id<=r.id).length
+      : null;
 
     return `<article class="registration-card">
       <div class="registration-head">
@@ -512,6 +566,19 @@ function renderRegistrations(){
             </select>
           </div>
         </div>
+        ${dueInfo?`
+          <div class="due-box ${dueInfo.className}">
+            <div class="due-title">${esc(dueInfo.text)}</div>
+            <div>${esc(dueInfo.detail)}</div>
+            ${dueInfo.className==="overdue"
+              ? `<div class="small" style="color:inherit;margin-top:4px">僅供 Admin 提醒：系統不會自動取消，也不會自動釋出名額。</div>`
+              : ""}
+          </div>`:""}
+        ${r.status==="waitlisted"?`
+          <div class="due-box">
+            <div class="due-title">第 ${waitlistPosition} 組備取｜${r.quantity} 人</div>
+            <div class="small">備取不占正式名額，也不會自動轉正。請由你人工判斷。</div>
+          </div>`:""}
         ${r.note?`<div><div class="meta-label">備註／其他需求</div><div class="note-box">${esc(r.note)}</div></div>`:""}
         <div style="margin:10px 0 14px">
           <div class="meta-label">確認信狀態</div>
@@ -530,16 +597,76 @@ function renderRegistrations(){
         </table></div>
         <div class="registration-actions">
           <button class="btn secondary" type="button" onclick="editRegistration(${r.id})">編輯</button>
+          ${r.status==="waitlisted"
+            ? `<button class="btn" type="button" onclick="promoteWaitlist(${r.id})">轉為正取（待付款）</button>`
+            : ""}
           <button class="btn secondary" type="button" onclick="resendConfirmation(${r.id})">重新寄送確認信</button>
           ${r.status==="cancelled"
             ? `<button class="btn secondary" type="button" onclick="restoreRegistration(${r.id})">恢復報名</button>`
-            : `<button class="btn danger" type="button" onclick="cancelRegistration(${r.id})">取消報名</button>`}
+            : r.status==="waitlisted"
+              ? `<button class="btn danger" type="button" onclick="cancelRegistration(${r.id})">取消備取</button>`
+              : `<button class="btn danger" type="button" onclick="cancelRegistration(${r.id})">取消報名／釋出名額</button>`}
           <button class="btn danger" type="button" onclick="deleteRegistration(${r.id})">永久刪除</button>
         </div>
       </div>
     </article>`;
   }).join("");
 }
+
+
+window.promoteWaitlist=async id=>{
+  const r=currentRegistrations.find(x=>x.id===id);
+  if(!r || r.status!=="waitlisted")return;
+
+  const remaining=Math.max(
+    Number(currentEvent?.capacity||0) -
+    currentRegistrations
+      .filter(x=>["confirmed","pending"].includes(x.status))
+      .reduce((sum,x)=>sum+Number(x.quantity||0),0),
+    0
+  );
+
+  if(!confirm(
+    `確定要將報名 #${id}（${r.name}，${r.quantity} 人）從備取轉為正取嗎？\n\n`+
+    `目前剩餘 ${remaining} 名；系統會再由資料庫重新檢查一次。\n`+
+    `成功後會立即占用 ${r.quantity} 個名額，狀態改為「待付款」，並從現在重新開始 5 日付款提醒期限。`
+  ))return;
+
+  msg($("adminMessage"),"正在重新檢查名額並轉為正取…","success");
+
+  const {data:due,error}=await client.rpc("admin_promote_waitlist",{
+    p_registration_id:id
+  });
+
+  if(error){
+    msg($("adminMessage"),error.message||"轉正失敗。","error");
+    return;
+  }
+
+  // 轉正是 UPDATE，不會觸發原本的 INSERT webhook；
+  // 因此由 Admin 主動寄出一封新的待付款通知。
+  const {data:mailData,error:mailError}=await client.functions.invoke("send-confirmation-email",{
+    body:{registration_id:id}
+  });
+
+  if(mailError || !mailData?.ok){
+    console.error(mailError,mailData);
+    msg(
+      $("adminMessage"),
+      `已成功轉為正取（待付款），付款提醒期限為 ${dateTimeText(due)}，但通知信寄送失敗；請稍後按「重新寄送確認信」。`,
+      "error"
+    );
+  }else{
+    msg(
+      $("adminMessage"),
+      `已轉為正取（待付款），付款提醒期限：${dateTimeText(due)}，並已寄出通知信。`,
+      "success"
+    );
+  }
+
+  await loadRegistrations(currentEvent.id);
+  await loadEvents();
+};
 
 window.updatePaymentStatus=async(id,selectEl)=>{
   const previous=selectEl.dataset.current||"unpaid";
@@ -571,6 +698,8 @@ window.updatePaymentStatus=async(id,selectEl)=>{
   if(r)r.payment_status=next;
 
   msg($("adminMessage"),`報名 #${id} 的繳費狀態已更新為「${paymentStatusText(next)}」。`,"success");
+  await loadRegistrations(currentEvent.id);
+  await loadEvents();
 };
 
 window.copyReference=async(ref,btn)=>{
@@ -795,11 +924,11 @@ window.resendConfirmation=async id=>{
 
 $("exportBtn").onclick=()=>{
   if(!currentRegistrations.length)return;
-  const rows=[["活動ID","活動名稱","內部流水號","公開報名UUID","報名時間","報名狀態","繳費狀態","聯絡人","電話","Email","LINE ID","報名人數","備註","參加者姓名","生日"]];
+  const rows=[["活動ID","活動名稱","內部流水號","公開報名UUID","報名時間","報名狀態","繳費狀態","付款提醒期限","聯絡人","電話","Email","LINE ID","報名人數","備註","參加者姓名","生日"]];
   for(const r of currentRegistrations){
     const ps=(r.participants||[]).slice().sort((a,b)=>a.id-b.id);
-    if(!ps.length)rows.push([currentEvent.id,currentEvent.title,r.id,r.public_reference||"",r.created_at,r.status,paymentStatusText(r.payment_status),r.name,r.phone,r.email,r.line_id||"",r.quantity,r.note||"","",""]);
-    else for(const p of ps)rows.push([currentEvent.id,currentEvent.title,r.id,r.public_reference||"",r.created_at,r.status,paymentStatusText(r.payment_status),r.name,r.phone,r.email,r.line_id||"",r.quantity,r.note||"",p.name,p.birthday||""]);
+    if(!ps.length)rows.push([currentEvent.id,currentEvent.title,r.id,r.public_reference||"",r.created_at,registrationStatusInfo(r.status).text,paymentStatusText(r.payment_status),r.payment_due_at||"",r.name,r.phone,r.email,r.line_id||"",r.quantity,r.note||"","",""]);
+    else for(const p of ps)rows.push([currentEvent.id,currentEvent.title,r.id,r.public_reference||"",r.created_at,registrationStatusInfo(r.status).text,paymentStatusText(r.payment_status),r.payment_due_at||"",r.name,r.phone,r.email,r.line_id||"",r.quantity,r.note||"",p.name,p.birthday||""]);
   }
   const csv="\uFEFF"+rows.map(row=>row.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("\r\n");
   const blob=new Blob([csv],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");
