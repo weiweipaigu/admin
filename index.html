@@ -51,6 +51,10 @@
     .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
     .toolbar-left{display:flex;gap:12px;align-items:end;flex-wrap:wrap}
     .copy-btn{border:0;background:transparent;color:var(--accent);font-weight:700;cursor:pointer;padding:0;margin-left:7px}
+    .payment-select{width:auto;min-width:150px;padding:7px 10px;border-radius:999px;font-weight:700}
+    .payment-select.unpaid{background:var(--warn-soft);color:var(--warn);border-color:#ead9ad}
+    .payment-select.paid{background:var(--success-soft);color:var(--success);border-color:#cfe0d2}
+    .payment-select.refunded{background:#eceae5;color:#6d6a62;border-color:#d9d5cb}
     .summary{grid-template-columns:repeat(4,1fr)}
     .tabs{overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none}
     .tabs::-webkit-scrollbar{display:none}
@@ -275,10 +279,17 @@ function timeText(s){return s?s.slice(0,5):""}
 function eventTypeText(type){
   return type==="family_day"?"日間親子活動":type==="night"?"夜間觀察活動":type==="special"?"社群特別活動":"未分類";
 }
+function paymentStatusText(status){
+  return status==="paid"?"已完成繳費":status==="refunded"?"已退款":"未繳費";
+}
+function paymentStatusClass(status){
+  return status==="paid"?"paid":status==="refunded"?"refunded":"unpaid";
+}
 const DEFAULT_EVENT_DESCRIPTION=`參加者適齡:
 體能需求:
 交通難度:
 
+此為日間親子活動，費用為每位孩子600元，家長不另收費。因步道寬度有限，每組家庭以兩位家長陪同為限。
 ※本活動不含保險，請自行投保旅平險。
 ※完成報名後，於活動日一周前請假全額退費，一周內請假不退費，請自行尋找代課。`;
 
@@ -427,7 +438,7 @@ $("eventSelect").addEventListener("change",async()=>{
 async function loadRegistrations(eventId){
   const event=eventsCache.find(e=>e.id===eventId);currentEvent=event||null;
   $("registrationList").innerHTML='<div class="empty">正在讀取報名資料…</div>';
-  const {data,error}=await client.from("registrations").select(`id,event_id,name,phone,email,line_id,quantity,status,created_at,public_reference,note,participants(id,name,birthday)`).eq("event_id",eventId).order("created_at",{ascending:true});
+  const {data,error}=await client.from("registrations").select(`id,event_id,name,phone,email,line_id,quantity,status,payment_status,created_at,public_reference,note,participants(id,name,birthday)`).eq("event_id",eventId).order("created_at",{ascending:true});
   if(error){msg($("adminMessage"),"無法讀取報名資料。","error");return}
 
   currentRegistrations=data||[];
@@ -488,6 +499,18 @@ function renderRegistrations(){
           <div><div class="meta-label">電話</div><div>${esc(r.phone)}</div></div>
           <div><div class="meta-label">E-mail</div><div>${esc(r.email)}</div></div>
           <div><div class="meta-label">LINE ID</div><div>${esc(r.line_id||"—")}</div></div>
+          <div>
+            <div class="meta-label">繳費狀態</div>
+            <select
+              class="payment-select ${paymentStatusClass(r.payment_status)}"
+              data-current="${esc(r.payment_status||"unpaid")}"
+              onchange="updatePaymentStatus(${r.id},this)"
+            >
+              <option value="unpaid" ${(r.payment_status||"unpaid")==="unpaid"?"selected":""}>未繳費</option>
+              <option value="paid" ${r.payment_status==="paid"?"selected":""}>已完成繳費</option>
+              <option value="refunded" ${r.payment_status==="refunded"?"selected":""}>已退款</option>
+            </select>
+          </div>
         </div>
         ${r.note?`<div><div class="meta-label">備註／其他需求</div><div class="note-box">${esc(r.note)}</div></div>`:""}
         <div style="margin:10px 0 14px">
@@ -517,6 +540,38 @@ function renderRegistrations(){
     </article>`;
   }).join("");
 }
+
+window.updatePaymentStatus=async(id,selectEl)=>{
+  const previous=selectEl.dataset.current||"unpaid";
+  const next=selectEl.value;
+
+  if(previous===next)return;
+
+  selectEl.disabled=true;
+
+  const {error}=await client.rpc("admin_update_payment_status",{
+    p_registration_id:id,
+    p_payment_status:next
+  });
+
+  selectEl.disabled=false;
+
+  if(error){
+    console.error(error);
+    selectEl.value=previous;
+    selectEl.className=`payment-select ${paymentStatusClass(previous)}`;
+    msg($("adminMessage"),error.message||"繳費狀態更新失敗。","error");
+    return;
+  }
+
+  selectEl.dataset.current=next;
+  selectEl.className=`payment-select ${paymentStatusClass(next)}`;
+
+  const r=currentRegistrations.find(x=>x.id===id);
+  if(r)r.payment_status=next;
+
+  msg($("adminMessage"),`報名 #${id} 的繳費狀態已更新為「${paymentStatusText(next)}」。`,"success");
+};
 
 window.copyReference=async(ref,btn)=>{
   try{
@@ -740,11 +795,11 @@ window.resendConfirmation=async id=>{
 
 $("exportBtn").onclick=()=>{
   if(!currentRegistrations.length)return;
-  const rows=[["活動ID","活動名稱","內部流水號","公開報名UUID","報名時間","狀態","聯絡人","電話","Email","LINE ID","報名人數","備註","參加者姓名","生日"]];
+  const rows=[["活動ID","活動名稱","內部流水號","公開報名UUID","報名時間","報名狀態","繳費狀態","聯絡人","電話","Email","LINE ID","報名人數","備註","參加者姓名","生日"]];
   for(const r of currentRegistrations){
     const ps=(r.participants||[]).slice().sort((a,b)=>a.id-b.id);
-    if(!ps.length)rows.push([currentEvent.id,currentEvent.title,r.id,r.public_reference||"",r.created_at,r.status,r.name,r.phone,r.email,r.line_id||"",r.quantity,r.note||"","",""]);
-    else for(const p of ps)rows.push([currentEvent.id,currentEvent.title,r.id,r.public_reference||"",r.created_at,r.status,r.name,r.phone,r.email,r.line_id||"",r.quantity,r.note||"",p.name,p.birthday||""]);
+    if(!ps.length)rows.push([currentEvent.id,currentEvent.title,r.id,r.public_reference||"",r.created_at,r.status,paymentStatusText(r.payment_status),r.name,r.phone,r.email,r.line_id||"",r.quantity,r.note||"","",""]);
+    else for(const p of ps)rows.push([currentEvent.id,currentEvent.title,r.id,r.public_reference||"",r.created_at,r.status,paymentStatusText(r.payment_status),r.name,r.phone,r.email,r.line_id||"",r.quantity,r.note||"",p.name,p.birthday||""]);
   }
   const csv="\uFEFF"+rows.map(row=>row.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("\r\n");
   const blob=new Blob([csv],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");
