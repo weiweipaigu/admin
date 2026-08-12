@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Admin | 瑋瑋老師的撒野記事錄</title>
+  <title>Admin｜瑋瑋老師的撒野記事錄</title>
+  <meta name="robots" content="noindex, nofollow" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root{
@@ -44,13 +45,38 @@
     .participants-table{width:100%;border-collapse:collapse}.participants-table th,.participants-table td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line)}.participants-table th{color:var(--muted);font-size:.86rem}
     .registration-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
     .status.cancelled{background:var(--danger-soft);color:var(--danger)}
+    .type-chip{display:inline-flex;align-items:center;padding:4px 9px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-size:.8rem;font-weight:700;margin-top:7px}
+    .public-ref{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow-wrap:anywhere;font-size:.88rem}
+    .note-box{white-space:pre-wrap;background:#fbfbf8;border:1px solid var(--line);border-radius:12px;padding:12px;margin:10px 0 14px}
+    .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+    .toolbar-left{display:flex;gap:12px;align-items:end;flex-wrap:wrap}
+    .copy-btn{border:0;background:transparent;color:var(--accent);font-weight:700;cursor:pointer;padding:0;margin-left:7px}
+    .summary{grid-template-columns:repeat(4,1fr)}
+    .tabs{overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none}
+    .tabs::-webkit-scrollbar{display:none}
+    .tab-btn{white-space:nowrap;flex:0 0 auto}
     .participant-edit-list{display:grid;gap:10px}
     .participant-edit-card{padding:12px;border:1px solid var(--line);border-radius:14px;background:#fbfbf8}
     .participant-edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
     .email-preview{background:#fbfbf8;border:1px solid var(--line);border-radius:16px;padding:18px}.email-preview h3{margin-top:18px}.email-preview h3:first-child{margin-top:0}.email-hint{font-size:.86rem;color:var(--muted);margin-top:5px}.message{display:none;margin:14px 0;padding:12px 14px;border-radius:14px}.message.error{display:block;background:var(--danger-soft);color:var(--danger)}.message.success{display:block;background:var(--success-soft);color:var(--success)}
     .empty{padding:28px;text-align:center;color:var(--muted)}[hidden]{display:none!important}
     footer{padding:18px 0 46px;color:var(--muted);font-size:.9rem}
-    @media(max-width:800px){.nav-inner,.registration-head{flex-direction:column;align-items:flex-start}.event-meta{grid-template-columns:repeat(2,1fr)}.form-grid,.contact-grid,.summary,.participant-edit-grid{grid-template-columns:1fr}}
+    @media(max-width:800px){
+      .nav-inner,.registration-head{flex-direction:column;align-items:flex-start}
+      .event-meta{grid-template-columns:repeat(2,1fr)}
+      .form-grid,.contact-grid,.summary,.participant-edit-grid{grid-template-columns:1fr}
+      .hero{padding:28px 0 18px}
+      .hero-box,.card{padding:18px}
+      .toolbar{align-items:stretch}
+      .toolbar>.btn,.toolbar-left,.toolbar-left>.field{width:100%;min-width:0!important}
+      .actions,.registration-actions{display:grid;grid-template-columns:1fr 1fr}
+      .actions .btn,.registration-actions .btn{width:100%}
+      .participants-table{min-width:480px}
+    }
+    @media(max-width:520px){
+      .event-meta{grid-template-columns:1fr 1fr}
+      .actions,.registration-actions{grid-template-columns:1fr}
+    }
   </style>
 </head>
 <body>
@@ -90,8 +116,9 @@
 <button id="exportBtn" class="btn secondary" disabled>匯出 CSV</button>
 </div>
 <div id="summary" class="summary" hidden>
-<div class="summary-item"><div class="summary-label">報名單數</div><div id="registrationCount" class="summary-value">0</div></div>
-<div class="summary-item"><div class="summary-label">總參加人數</div><div id="participantCount" class="summary-value">0</div></div>
+<div class="summary-item"><div class="summary-label">有效報名單數</div><div id="registrationCount" class="summary-value">0</div></div>
+<div class="summary-item"><div class="summary-label">有效參加人數</div><div id="participantCount" class="summary-value">0</div></div>
+<div class="summary-item"><div class="summary-label">剩餘名額</div><div id="remainingCount" class="summary-value">0</div></div>
 <div class="summary-item"><div class="summary-label">活動總名額</div><div id="capacityCount" class="summary-value">0</div></div>
 </div>
 <div id="adminMessage" class="message"></div>
@@ -119,6 +146,11 @@
         <label>參加者資料</label>
         <div id="editParticipants" class="participant-edit-list"></div>
       </div>
+      <div class="field full">
+        <label for="editNote">備註／其他需求</label>
+        <textarea id="editNote" maxlength="1000"></textarea>
+        <div class="small">最多 1000 字。</div>
+      </div>
     </div>
     <button id="saveRegistrationBtn" class="btn" type="submit">儲存報名修改</button>
   </form>
@@ -132,7 +164,7 @@
   <div class="toolbar">
     <div>
       <h2>確認信設定</h2>
-      <p class="small">報名成功後會由 Gmail API 自動寄出。活動與報名資料由系統帶入，以下文字可隨時修改。</p>
+      <p class="small">報名成功後會由 Resend 自動寄出。活動與報名資料由系統帶入，以下文字可隨時修改。</p>
     </div>
   </div>
   <div id="emailSettingsMessage" class="message"></div>
@@ -152,7 +184,7 @@
       <div class="field">
         <label for="emailSubject">Email 主旨</label>
         <input id="emailSubject" required maxlength="200">
-        <div class="email-hint">可使用：{{event_title}}、{{registration_id}}、{{contact_name}}</div>
+        <div class="email-hint">可使用：{{event_title}}、{{public_reference}}、{{registration_id}}、{{contact_name}}；其中 {{registration_id}} 為相容舊模板，現在同樣帶入公開 UUID。</div>
       </div>
 
       <div class="field full">
@@ -207,12 +239,13 @@
 <div class="field full"><label for="title">活動名稱</label><input id="title" required maxlength="200"></div>
 <div class="field"><label for="eventDate">日期</label><input id="eventDate" type="date" required></div>
 <div class="field"><label for="status">報名狀態</label><select id="status"><option value="open">open｜開放報名</option><option value="closed">closed｜關閉報名</option><option value="archived">archived｜封存</option></select></div>
+<div class="field"><label for="eventType">活動類型</label><select id="eventType" required><option value="family_day">日間親子活動</option><option value="night">夜間觀察活動</option><option value="special">社群特別活動</option></select></div>
 <div class="field"><label for="startTime">開始時間</label><input id="startTime" type="time"></div>
 <div class="field"><label for="endTime">結束時間</label><input id="endTime" type="time"></div>
 <div class="field"><label for="location">地點</label><input id="location" maxlength="200"></div>
 <div class="field"><label for="capacity">總名額</label><input id="capacity" type="number" min="0" required value="0"></div>
 <div class="field"><label for="price">費用</label><input id="price" type="number" min="0" value="0"></div>
-<div class="field full"><label for="description">活動說明</label><textarea id="description"></textarea></div>
+<div class="field full"><label for="description">活動說明</label><textarea id="description" style="min-height:220px"></textarea><div class="small">新增活動時會自動帶入常用說明模板；仍可依每場活動自由修改。</div></div>
 </div>
 <button id="saveEventBtn" class="btn" type="submit">儲存活動</button>
 </form>
@@ -223,7 +256,7 @@
 </div></section>
 </main>
 
-<footer><div class="wrap">© 2026 瑋瑋老師的撒野記事錄 · Admin Page</div></footer>
+<footer><div class="wrap">© 2026 瑋瑋老師的撒野記事錄 · Admin</div></footer>
 
 <script>
 const SUPABASE_URL="https://aexhjnpskprtvpqbxriy.supabase.co";
@@ -239,6 +272,16 @@ function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&l
 function dateText(s){if(!s)return"—";const [y,m,d]=s.split("-");return `${y}/${m}/${d}`}
 function dateTimeText(s){return s?new Intl.DateTimeFormat("zh-TW",{year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}).format(new Date(s)):"—"}
 function timeText(s){return s?s.slice(0,5):""}
+function eventTypeText(type){
+  return type==="family_day"?"日間親子活動":type==="night"?"夜間觀察活動":type==="special"?"社群特別活動":"未分類";
+}
+const DEFAULT_EVENT_DESCRIPTION=`參加者適齡:
+體能需求:
+交通難度:
+
+※本活動不含保險，請自行投保旅平險。
+※完成報名後，於活動日一周前請假全額退費，一周內請假不退費，請自行尋找代課。`;
+
 
 async function applySession(session){
   if(session?.user){
@@ -270,7 +313,7 @@ document.querySelectorAll(".tab-btn").forEach(btn=>btn.onclick=async()=>{
 });
 
 async function loadEvents(){
-  const {data,error}=await client.from("events").select("id,title,event_date,start_time,end_time,location,description,capacity,price,status").order("event_date",{ascending:false}).order("id",{ascending:false});
+  const {data,error}=await client.from("events").select("id,title,event_date,start_time,end_time,location,description,capacity,price,status,event_type").order("event_date",{ascending:false}).order("id",{ascending:false});
   if(error){msg($("eventsMessage"),"無法讀取活動，請確認 RLS 權限。","error");return}
   eventsCache=data||[];
   renderEvents();
@@ -287,21 +330,22 @@ async function getPublicStats(eventId){
 
 async function renderEvents(){
   $("eventsList").innerHTML='<div class="empty">正在整理活動資料…</div>';
+  const statsList=await Promise.all(eventsCache.map(e=>getPublicStats(e.id)));
   const cards=[];
-  for(const e of eventsCache){
-    const stats=await getPublicStats(e.id);
+  eventsCache.forEach((e,index)=>{
+    const stats=statsList[index];
     const registered=stats?.registered??0,remaining=stats?.remaining??e.capacity;
     cards.push(`
       <article class="event-card">
         <div class="event-head">
-          <div><h3>#${e.id}｜${esc(e.title)}</h3><div class="small">${dateText(e.event_date)} ${timeText(e.start_time)}${e.end_time?`–${timeText(e.end_time)}`:""}｜${esc(e.location||"未填地點")}</div></div>
+          <div><h3>#${e.id}｜${esc(e.title)}</h3><div class="small">${dateText(e.event_date)} ${timeText(e.start_time)}${e.end_time?`–${timeText(e.end_time)}`:""}｜${esc(e.location||"未填地點")}</div><span class="type-chip">${esc(eventTypeText(e.event_type))}</span></div>
           <span class="status ${e.status==="open"?"open":e.status==="archived"?"archived":"closed"}">${e.status==="open"?"開放報名":e.status==="archived"?"已封存":"關閉報名"}</span>
         </div>
         <div class="event-meta">
           <div class="meta-box"><div class="meta-label">總名額</div><div class="meta-value">${e.capacity}</div></div>
           <div class="meta-box"><div class="meta-label">已報名</div><div class="meta-value">${registered}</div></div>
           <div class="meta-box"><div class="meta-label">剩餘</div><div class="meta-value">${remaining}</div></div>
-          <div class="meta-box"><div class="meta-label">費用</div><div class="meta-value">${Number(e.price)>0?`NT$ ${Number(e.price).toLocaleString("zh-TW")}`:"—"}</div></div>
+          <div class="meta-box"><div class="meta-label">費用</div><div class="meta-value">${Number(e.price)>0?`NT$ ${Number(e.price).toLocaleString("zh-TW")} 起`:"詳見說明"}</div></div>
         </div>
         <div class="actions">
           <button class="btn secondary" onclick="editEvent(${e.id})">編輯活動</button>
@@ -313,7 +357,7 @@ async function renderEvents(){
           <button class="btn danger" onclick="deleteEvent(${e.id})">永久刪除</button>
         </div>
       </article>`);
-  }
+  });
   $("eventsList").innerHTML=cards.length?cards.join(""):'<div class="empty">目前沒有活動。</div>';
 }
 
@@ -323,7 +367,9 @@ $("cancelEventBtn").onclick=()=>{$("eventFormWrap").hidden=true;clearMsg($("even
 function openEventForm(e=null){
   $("eventFormWrap").hidden=false;$("eventFormTitle").textContent=e?"編輯活動":"新增活動";$("eventId").value=e?.id||"";
   $("title").value=e?.title||"";$("eventDate").value=e?.event_date||"";$("startTime").value=timeText(e?.start_time);$("endTime").value=timeText(e?.end_time);
-  $("location").value=e?.location||"";$("capacity").value=e?.capacity??0;$("price").value=e?.price??0;$("status").value=e?.status||"open";$("description").value=e?.description||"";
+  $("location").value=e?.location||"";$("capacity").value=e?.capacity??0;$("price").value=e?.price??0;$("status").value=e?.status||"open";
+  $("eventType").value=e?.event_type||"family_day";
+  $("description").value=e ? (e.description||"") : DEFAULT_EVENT_DESCRIPTION;
   clearMsg($("eventFormMessage"));$("eventFormWrap").scrollIntoView({behavior:"smooth"});
 }
 
@@ -331,7 +377,7 @@ window.editEvent=id=>{const e=eventsCache.find(x=>x.id===id);if(e)openEventForm(
 
 $("eventForm").addEventListener("submit",async e=>{
   e.preventDefault();clearMsg($("eventFormMessage"));$("saveEventBtn").disabled=true;$("saveEventBtn").textContent="儲存中…";
-  const payload={title:$("title").value.trim(),event_date:$("eventDate").value,start_time:$("startTime").value||null,end_time:$("endTime").value||null,location:$("location").value.trim()||null,description:$("description").value.trim()||null,capacity:Number($("capacity").value),price:Number($("price").value||0),status:$("status").value};
+  const payload={title:$("title").value.trim(),event_date:$("eventDate").value,start_time:$("startTime").value||null,end_time:$("endTime").value||null,location:$("location").value.trim()||null,description:$("description").value.trim()||null,capacity:Number($("capacity").value),price:Number($("price").value||0),status:$("status").value,event_type:$("eventType").value};
   const id=Number($("eventId").value);let result;
   if(id){result=await client.from("events").update(payload).eq("id",id)}else{result=await client.from("events").insert(payload)}
   $("saveEventBtn").disabled=false;$("saveEventBtn").textContent="儲存活動";
@@ -381,7 +427,7 @@ $("eventSelect").addEventListener("change",async()=>{
 async function loadRegistrations(eventId){
   const event=eventsCache.find(e=>e.id===eventId);currentEvent=event||null;
   $("registrationList").innerHTML='<div class="empty">正在讀取報名資料…</div>';
-  const {data,error}=await client.from("registrations").select(`id,event_id,name,phone,email,line_id,quantity,status,created_at,participants(id,name,birthday)`).eq("event_id",eventId).order("created_at",{ascending:true});
+  const {data,error}=await client.from("registrations").select(`id,event_id,name,phone,email,line_id,quantity,status,created_at,public_reference,note,participants(id,name,birthday)`).eq("event_id",eventId).order("created_at",{ascending:true});
   if(error){msg($("adminMessage"),"無法讀取報名資料。","error");return}
 
   currentRegistrations=data||[];
@@ -406,8 +452,9 @@ async function loadRegistrations(eventId){
 function renderRegistrations(){
   const valid=currentRegistrations.filter(r=>["confirmed","pending"].includes(r.status));
   const total=valid.reduce((s,r)=>s+Number(r.quantity||0),0);
-  $("registrationCount").textContent=currentRegistrations.length;
+  $("registrationCount").textContent=valid.length;
   $("participantCount").textContent=total;
+  $("remainingCount").textContent=Math.max(Number(currentEvent?.capacity||0)-total,0);
   $("capacityCount").textContent=currentEvent?.capacity??0;
   $("summary").hidden=false;
   $("exportBtn").disabled=!currentRegistrations.length;
@@ -431,6 +478,7 @@ function renderRegistrations(){
         <div>
           <h3>報名 #${r.id}｜${esc(r.name)}</h3>
           <div class="small">建立時間：${dateTimeText(r.created_at)}</div>
+          <div class="small">公開報名編號：<span class="public-ref">${esc(r.public_reference||"—")}</span>${r.public_reference?`<button class="copy-btn" type="button" onclick="copyReference('${esc(r.public_reference)}',this)">複製</button>`:""}</div>
         </div>
         <div><span class="status ${statusClass}">${esc(statusText)}</span>　<span class="small">${r.quantity} 人</span></div>
       </div>
@@ -441,6 +489,7 @@ function renderRegistrations(){
           <div><div class="meta-label">E-mail</div><div>${esc(r.email)}</div></div>
           <div><div class="meta-label">LINE ID</div><div>${esc(r.line_id||"—")}</div></div>
         </div>
+        ${r.note?`<div><div class="meta-label">備註／其他需求</div><div class="note-box">${esc(r.note)}</div></div>`:""}
         <div style="margin:10px 0 14px">
           <div class="meta-label">確認信狀態</div>
           <div>${r.email_log
@@ -452,10 +501,10 @@ function renderRegistrations(){
             : "尚無寄送紀錄"}</div>
         </div>
         <h3>參加者</h3>
-        <table class="participants-table">
+        <div class="table-wrap"><table class="participants-table">
           <thead><tr><th>#</th><th>姓名</th><th>生日</th></tr></thead>
           <tbody>${rows}</tbody>
-        </table>
+        </table></div>
         <div class="registration-actions">
           <button class="btn secondary" type="button" onclick="editRegistration(${r.id})">編輯</button>
           <button class="btn secondary" type="button" onclick="resendConfirmation(${r.id})">重新寄送確認信</button>
@@ -468,6 +517,16 @@ function renderRegistrations(){
     </article>`;
   }).join("");
 }
+
+window.copyReference=async(ref,btn)=>{
+  try{
+    await navigator.clipboard.writeText(ref);
+    const old=btn.textContent;btn.textContent="已複製 ✓";
+    setTimeout(()=>btn.textContent=old,1500);
+  }catch{
+    window.prompt("請複製報名編號：",ref);
+  }
+};
 
 function fillEditParticipantFields(count, existing=[]){
   const wrap=$("editParticipants");
@@ -503,6 +562,7 @@ window.editRegistration=id=>{
   $("editPhone").value=r.phone||"";
   $("editEmail").value=r.email||"";
   $("editLineId").value=r.line_id||"";
+  $("editNote").value=r.note||"";
 
   const currentQty=Math.max(1,Number(r.quantity||1));
   const capacity=Math.max(currentEvent?.capacity||currentQty,currentQty);
@@ -550,13 +610,14 @@ $("registrationEditForm").addEventListener("submit",async e=>{
   $("saveRegistrationBtn").disabled=true;
   $("saveRegistrationBtn").textContent="儲存中…";
 
-  const {error}=await client.rpc("admin_update_registration",{
+  const {error}=await client.rpc("admin_update_registration_v2",{
     p_registration_id:Number($("editRegistrationId").value),
     p_contact_name:$("editContactName").value.trim(),
     p_phone:$("editPhone").value.trim(),
     p_email:$("editEmail").value.trim(),
     p_line_id:$("editLineId").value.trim()||null,
-    p_participants:participants
+    p_participants:participants,
+    p_note:$("editNote").value.trim()||null
   });
 
   $("saveRegistrationBtn").disabled=false;
@@ -679,11 +740,11 @@ window.resendConfirmation=async id=>{
 
 $("exportBtn").onclick=()=>{
   if(!currentRegistrations.length)return;
-  const rows=[["活動ID","活動名稱","報名編號","報名時間","狀態","聯絡人","電話","Email","LINE ID","報名人數","參加者姓名","生日"]];
+  const rows=[["活動ID","活動名稱","內部流水號","公開報名UUID","報名時間","狀態","聯絡人","電話","Email","LINE ID","報名人數","備註","參加者姓名","生日"]];
   for(const r of currentRegistrations){
     const ps=(r.participants||[]).slice().sort((a,b)=>a.id-b.id);
-    if(!ps.length)rows.push([currentEvent.id,currentEvent.title,r.id,r.created_at,r.status,r.name,r.phone,r.email,r.line_id||"",r.quantity,"",""]);
-    else for(const p of ps)rows.push([currentEvent.id,currentEvent.title,r.id,r.created_at,r.status,r.name,r.phone,r.email,r.line_id||"",r.quantity,p.name,p.birthday||""]);
+    if(!ps.length)rows.push([currentEvent.id,currentEvent.title,r.id,r.public_reference||"",r.created_at,r.status,r.name,r.phone,r.email,r.line_id||"",r.quantity,r.note||"","",""]);
+    else for(const p of ps)rows.push([currentEvent.id,currentEvent.title,r.id,r.public_reference||"",r.created_at,r.status,r.name,r.phone,r.email,r.line_id||"",r.quantity,r.note||"",p.name,p.birthday||""]);
   }
   const csv="\uFEFF"+rows.map(row=>row.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(",")).join("\r\n");
   const blob=new Blob([csv],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");
