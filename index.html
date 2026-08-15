@@ -56,6 +56,11 @@
     .note-box{white-space:pre-wrap;background:#fbfbf8;border:1px solid var(--line);border-radius:12px;padding:12px;margin:10px 0 14px}
     .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
     .toolbar-left{display:flex;gap:12px;align-items:end;flex-wrap:wrap}
+    .event-filter-panel{display:grid;grid-template-columns:minmax(240px,2fr) repeat(3,minmax(150px,1fr));gap:12px;align-items:end;margin:4px 0 16px;padding:14px;border:1px solid var(--line);border-radius:16px;background:#fbfbf8}
+    .event-filter-panel .field{margin:0}
+    .event-filter-summary{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin:-4px 0 14px}
+    .event-filter-summary .small{margin:0}
+    .text-btn{border:0;background:transparent;color:var(--accent);font-weight:700;cursor:pointer;padding:3px 0;text-decoration:underline;text-underline-offset:3px}
     .copy-btn{border:0;background:transparent;color:var(--accent);font-weight:700;cursor:pointer;padding:0;margin-left:7px}
     .payment-select{width:auto;min-width:150px;padding:7px 10px;border-radius:999px;font-weight:700}
     .payment-select.unpaid{background:var(--warn-soft);color:var(--warn);border-color:#ead9ad}
@@ -79,6 +84,7 @@
       .hero-box,.card{padding:18px}
       .toolbar{align-items:stretch}
       .toolbar>.btn,.toolbar-left,.toolbar-left>.field{width:100%;min-width:0!important}
+      .event-filter-panel{grid-template-columns:1fr}
       .actions,.registration-actions{display:grid;grid-template-columns:1fr 1fr}
       .actions .btn,.registration-actions .btn{width:100%}
       .participants-table{min-width:480px}
@@ -115,6 +121,49 @@
 <article class="card">
 <div class="toolbar"><div><h2>活動管理</h2><p class="small">新增或修改後，Calendar 會直接讀取 Supabase 最新資料。</p></div><button id="newEventBtn" class="btn">＋ 新增活動</button></div>
 <div id="eventsMessage" class="message"></div>
+
+<div class="event-filter-panel" aria-label="活動搜尋與排序">
+  <div class="field">
+    <label for="eventSearch">搜尋活動</label>
+    <input id="eventSearch" type="search" placeholder="搜尋活動名稱、地點或活動編號…" autocomplete="off">
+  </div>
+
+  <div class="field">
+    <label for="eventSort">排序</label>
+    <select id="eventSort">
+      <option value="upcoming_first">近期活動優先</option>
+      <option value="date_asc">活動日期：近 → 遠</option>
+      <option value="date_desc">活動日期：遠 → 近</option>
+      <option value="id_desc">活動編號：大 → 小</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <label for="eventStatusFilter">報名狀態</label>
+    <select id="eventStatusFilter">
+      <option value="">全部狀態</option>
+      <option value="open">開放報名</option>
+      <option value="closed">關閉報名</option>
+      <option value="archived">已封存</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <label for="eventTypeFilter">活動分類</label>
+    <select id="eventTypeFilter">
+      <option value="">全部分類</option>
+      <option value="family_day">日間親子活動</option>
+      <option value="night">夜間觀察活動</option>
+      <option value="special">社群特別活動</option>
+    </select>
+  </div>
+</div>
+
+<div class="event-filter-summary">
+  <p id="eventFilterCount" class="small">正在整理活動…</p>
+  <button id="clearEventFiltersBtn" class="text-btn" type="button">清除搜尋與篩選</button>
+</div>
+
 <div id="eventsList" class="events-grid"><div class="empty">正在讀取活動…</div></div>
 </article>
 </div>
@@ -276,6 +325,7 @@ const client=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 
 const $=id=>document.getElementById(id);
 let eventsCache=[],currentEvent=null,currentRegistrations=[];
+let eventStatsCache=new Map();
 
 function msg(el,text,type){el.textContent=text;el.className=`message ${type}`}
 function clearMsg(el){el.textContent="";el.className="message"}
@@ -285,6 +335,111 @@ function dateTimeText(s){return s?new Intl.DateTimeFormat("zh-TW",{year:"numeric
 function timeText(s){return s?s.slice(0,5):""}
 function eventTypeText(type){
   return type==="family_day"?"日間親子活動":type==="night"?"夜間觀察活動":type==="special"?"社群特別活動":"未分類";
+}
+
+function localTodayKey(){
+  const now=new Date();
+  return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
+}
+
+function normalizedSearchText(value){
+  return String(value??"").trim().toLocaleLowerCase("zh-TW");
+}
+
+function getFilteredSortedEvents(){
+  const query=normalizedSearchText($("eventSearch")?.value);
+  const status=$("eventStatusFilter")?.value||"";
+  const type=$("eventTypeFilter")?.value||"";
+  const sort=$("eventSort")?.value||"upcoming_first";
+  const today=localTodayKey();
+
+  let list=eventsCache.filter(e=>{
+    if(status && e.status!==status)return false;
+    if(type && e.event_type!==type)return false;
+
+    if(query){
+      const haystack=[
+        e.id,
+        `#${e.id}`,
+        e.title,
+        e.location,
+        e.event_date,
+        eventTypeText(e.event_type)
+      ].map(normalizedSearchText).join(" ");
+      if(!haystack.includes(query))return false;
+    }
+
+    return true;
+  });
+
+  list=list.slice().sort((a,b)=>{
+    const aDate=a.event_date||"";
+    const bDate=b.event_date||"";
+
+    if(sort==="date_asc"){
+      return aDate.localeCompare(bDate)||Number(a.id)-Number(b.id);
+    }
+
+    if(sort==="date_desc"){
+      return bDate.localeCompare(aDate)||Number(b.id)-Number(a.id);
+    }
+
+    if(sort==="id_desc"){
+      return Number(b.id)-Number(a.id);
+    }
+
+    // 近期活動優先：
+    // 今天與未來活動依日期由近到遠；過往活動接在後面，由新到舊。
+    const aFuture=aDate>=today;
+    const bFuture=bDate>=today;
+
+    if(aFuture!==bFuture)return aFuture?-1:1;
+    if(aFuture)return aDate.localeCompare(bDate)||Number(a.id)-Number(b.id);
+    return bDate.localeCompare(aDate)||Number(b.id)-Number(a.id);
+  });
+
+  return list;
+}
+
+function renderEventSelect(){
+  const select=$("eventSelect");
+  const currentValue=select.value;
+  select.innerHTML='<option value="">請選擇活動</option>';
+
+  const today=localTodayKey();
+  const ordered=eventsCache.slice().sort((a,b)=>{
+    const aDate=a.event_date||"";
+    const bDate=b.event_date||"";
+    const aFuture=aDate>=today;
+    const bFuture=bDate>=today;
+
+    if(aFuture!==bFuture)return aFuture?-1:1;
+    if(aFuture)return aDate.localeCompare(bDate)||Number(a.id)-Number(b.id);
+    return bDate.localeCompare(aDate)||Number(b.id)-Number(a.id);
+  });
+
+  const upcoming=document.createElement("optgroup");
+  upcoming.label="近期／未來活動";
+  const past=document.createElement("optgroup");
+  past.label="過往活動";
+
+  for(const e of ordered){
+    const o=document.createElement("option");
+    o.value=e.id;
+    o.textContent=`${dateText(e.event_date)}｜${e.title}｜#${e.id}`;
+    o.dataset.capacity=e.capacity;
+    o.dataset.title=e.title;
+
+    if((e.event_date||"")>=today)upcoming.appendChild(o);
+    else past.appendChild(o);
+  }
+
+  if(upcoming.children.length)select.appendChild(upcoming);
+  if(past.children.length)select.appendChild(past);
+
+  if(currentValue && eventsCache.some(e=>String(e.id)===String(currentValue))){
+    select.value=currentValue;
+  }
 }
 function paymentStatusText(status){
   return status==="paid"?"已完成繳費":status==="refunded"?"已退款":"未繳費";
@@ -371,14 +526,25 @@ document.querySelectorAll(".tab-btn").forEach(btn=>btn.onclick=async()=>{
 });
 
 async function loadEvents(){
-  const {data,error}=await client.from("events").select("id,title,event_date,start_time,end_time,location,description,capacity,price,status,event_type").order("event_date",{ascending:false}).order("id",{ascending:false});
-  if(error){msg($("eventsMessage"),"無法讀取活動，請確認 RLS 權限。","error");return}
-  eventsCache=data||[];
-  renderEvents();
-  $("eventSelect").innerHTML='<option value="">請選擇活動</option>';
-  for(const e of eventsCache){
-    const o=document.createElement("option");o.value=e.id;o.textContent=`#${e.id}｜${dateText(e.event_date)}｜${e.title}`;o.dataset.capacity=e.capacity;o.dataset.title=e.title;$("eventSelect").appendChild(o);
+  const {data,error}=await client.from("events")
+    .select("id,title,event_date,start_time,end_time,location,description,capacity,price,status,event_type")
+    .order("event_date",{ascending:false})
+    .order("id",{ascending:false});
+
+  if(error){
+    msg($("eventsMessage"),"無法讀取活動，請確認 RLS 權限。","error");
+    return;
   }
+
+  eventsCache=data||[];
+
+  const statsList=await Promise.all(eventsCache.map(e=>getPublicStats(e.id)));
+  eventStatsCache=new Map(
+    eventsCache.map((e,index)=>[Number(e.id),statsList[index]])
+  );
+
+  renderEvents();
+  renderEventSelect();
 }
 
 async function getPublicStats(eventId){
@@ -386,13 +552,30 @@ async function getPublicStats(eventId){
   return data&&data[0]?data[0]:null;
 }
 
-async function renderEvents(){
-  $("eventsList").innerHTML='<div class="empty">正在整理活動資料…</div>';
-  const statsList=await Promise.all(eventsCache.map(e=>getPublicStats(e.id)));
+function renderEvents(){
+  const visibleEvents=getFilteredSortedEvents();
+  const total=eventsCache.length;
+
+  $("eventFilterCount").textContent=
+    visibleEvents.length===total
+      ? `共 ${total} 場活動`
+      : `顯示 ${visibleEvents.length} / ${total} 場活動`;
+
+  if(!visibleEvents.length){
+    $("eventsList").innerHTML=
+      total
+        ? '<div class="empty">找不到符合目前搜尋或篩選條件的活動。</div>'
+        : '<div class="empty">目前沒有活動。</div>';
+    return;
+  }
+
   const cards=[];
-  eventsCache.forEach((e,index)=>{
-    const stats=statsList[index];
-    const registered=stats?.registered??0,remaining=stats?.remaining??e.capacity;
+
+  visibleEvents.forEach(e=>{
+    const stats=eventStatsCache.get(Number(e.id));
+    const registered=stats?.registered??0;
+    const remaining=stats?.remaining??e.capacity;
+
     cards.push(`
       <article class="event-card">
         <div class="event-head">
@@ -416,8 +599,24 @@ async function renderEvents(){
         </div>
       </article>`);
   });
-  $("eventsList").innerHTML=cards.length?cards.join(""):'<div class="empty">目前沒有活動。</div>';
+
+  $("eventsList").innerHTML=cards.join("");
 }
+
+["eventSort","eventStatusFilter","eventTypeFilter"].forEach(id=>{
+  $(id).addEventListener("change",renderEvents);
+});
+
+$("eventSearch").addEventListener("input",renderEvents);
+
+$("clearEventFiltersBtn").onclick=()=>{
+  $("eventSearch").value="";
+  $("eventSort").value="upcoming_first";
+  $("eventStatusFilter").value="";
+  $("eventTypeFilter").value="";
+  renderEvents();
+  $("eventSearch").focus();
+};
 
 $("newEventBtn").onclick=()=>openEventForm();
 $("cancelEventBtn").onclick=()=>{$("eventFormWrap").hidden=true;clearMsg($("eventFormMessage"))};
