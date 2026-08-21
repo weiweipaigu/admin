@@ -73,7 +73,14 @@
     .participant-edit-list{display:grid;gap:10px}
     .participant-edit-card{padding:12px;border:1px solid var(--line);border-radius:14px;background:#fbfbf8}
     .participant-edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    .email-preview{background:#fbfbf8;border:1px solid var(--line);border-radius:16px;padding:18px}.email-preview h3{margin-top:18px}.email-preview h3:first-child{margin-top:0}.email-hint{font-size:.86rem;color:var(--muted);margin-top:5px}.message{display:none;margin:14px 0;padding:12px 14px;border-radius:14px}.message.error{display:block;background:var(--danger-soft);color:var(--danger)}.message.success{display:block;background:var(--success-soft);color:var(--success)}
+    .email-preview{background:#fbfbf8;border:1px solid var(--line);border-radius:16px;padding:18px}.email-preview h3{margin-top:18px}.email-preview h3:first-child{margin-top:0}.email-hint{font-size:.86rem;color:var(--muted);margin-top:5px}
+    .notification-panel{margin:0 0 18px;padding:18px;border:1px solid var(--line);border-radius:18px;background:#fbfbf8}
+    .notification-panel .toolbar{margin-bottom:12px}
+    .notification-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:4px}
+    .recipient-count{display:inline-flex;align-items:center;width:fit-content;padding:6px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-size:.86rem;font-weight:700}
+    .notification-preview{margin-top:16px;padding:18px;border:1px solid var(--line);border-radius:16px;background:#fff}
+    .notification-preview .preview-message{white-space:pre-wrap}
+    .message{display:none;margin:14px 0;padding:12px 14px;border-radius:14px}.message.error{display:block;background:var(--danger-soft);color:var(--danger)}.message.success{display:block;background:var(--success-soft);color:var(--success)}
     .empty{padding:28px;text-align:center;color:var(--muted)}[hidden]{display:none!important}
     footer{padding:18px 0 46px;color:var(--muted);font-size:.9rem}
     @media(max-width:800px){
@@ -86,6 +93,8 @@
       .toolbar>.btn,.toolbar-left,.toolbar-left>.field{width:100%;min-width:0!important}
       .event-filter-panel{grid-template-columns:1fr}
       .actions,.registration-actions{display:grid;grid-template-columns:1fr 1fr}
+      .notification-actions{display:grid;grid-template-columns:1fr}
+      .notification-actions .btn{width:100%}
       .actions .btn,.registration-actions .btn{width:100%}
       .participants-table{min-width:480px}
     }
@@ -172,8 +181,58 @@
 <article class="card">
 <div class="toolbar">
 <div class="field" style="margin:0;min-width:280px"><label for="eventSelect">選擇活動</label><select id="eventSelect"><option value="">請選擇活動</option></select></div>
-<button id="exportBtn" class="btn secondary" disabled>匯出 CSV</button>
+<div class="toolbar-left">
+  <button id="notifyEventBtn" class="btn secondary" type="button" disabled>✉ 寄送活動通知</button>
+  <button id="exportBtn" class="btn secondary" disabled>匯出 CSV</button>
 </div>
+</div>
+
+<div id="eventNotificationWrap" class="notification-panel" hidden>
+  <div class="toolbar">
+    <div>
+      <h2 style="margin-bottom:6px">寄送本場活動通知</h2>
+      <p class="small" style="margin:0">系統會為每個聯絡 E-mail 各寄一封獨立信件，收件者彼此看不到其他人的地址。</p>
+    </div>
+    <button id="cancelNotificationBtn" class="btn secondary" type="button">取消</button>
+  </div>
+
+  <div class="form-grid">
+    <div class="field">
+      <label for="notificationRecipientGroup">收件對象</label>
+      <select id="notificationRecipientGroup">
+        <option value="active">正取參加者（已確認＋待付款）</option>
+        <option value="active_waitlist">正取＋備取</option>
+        <option value="waitlist">僅備取</option>
+      </select>
+      <div id="notificationRecipientCount" class="recipient-count">預計寄送：0 個 E-mail</div>
+    </div>
+
+    <div class="field">
+      <label for="notificationSubject">Email 主旨</label>
+      <input id="notificationSubject" maxlength="200" placeholder="例如：8/30 夜間觀察｜行前通知">
+    </div>
+
+    <div class="field full">
+      <label for="notificationMessage">通知內容</label>
+      <textarea id="notificationMessage" maxlength="10000" style="min-height:220px" placeholder="輸入集合資訊、天候提醒、攜帶物品或其他本場活動相關通知。"></textarea>
+      <div class="small">此功能建議僅用於該場活動的行前、異動、天候、集合或取消通知。</div>
+    </div>
+  </div>
+
+  <div class="notification-actions">
+    <button id="previewNotificationBtn" class="btn secondary" type="button">預覽</button>
+    <button id="sendNotificationBtn" class="btn" type="button">確認寄送</button>
+  </div>
+
+  <div id="notificationMessageBox" class="message"></div>
+
+  <div id="notificationPreview" class="notification-preview" hidden>
+    <div class="meta-label">預覽</div>
+    <h3 id="notificationPreviewSubject" style="margin-top:6px"></h3>
+    <div id="notificationPreviewBody" class="preview-message"></div>
+  </div>
+</div>
+
 <div id="summary" class="summary" hidden>
 <div class="summary-item"><div class="summary-label">有效報名單數</div><div id="registrationCount" class="summary-value">0</div></div>
 <div class="summary-item"><div class="summary-label">有效參加人數</div><div id="participantCount" class="summary-value">0</div></div>
@@ -456,6 +515,41 @@ function registrationStatusInfo(status){
   return {text:status||"未知",className:"archived"};
 }
 
+function notificationStatuses(group){
+  if(group==="waitlist")return ["waitlisted"];
+  if(group==="active_waitlist")return ["confirmed","pending","waitlisted"];
+  return ["confirmed","pending"];
+}
+
+function notificationGroupText(group){
+  if(group==="waitlist")return "僅備取";
+  if(group==="active_waitlist")return "正取＋備取";
+  return "正取參加者";
+}
+
+function getNotificationRecipients(){
+  const statuses=notificationStatuses($("notificationRecipientGroup")?.value||"active");
+  const unique=new Map();
+
+  for(const r of currentRegistrations){
+    if(!statuses.includes(r.status))continue;
+    const email=String(r.email||"").trim();
+    if(!email)continue;
+    const key=email.toLowerCase();
+    if(!unique.has(key))unique.set(key,{email,name:r.name||""});
+  }
+
+  return [...unique.values()];
+}
+
+function updateNotificationRecipientCount(){
+  const recipients=getNotificationRecipients();
+  const el=$("notificationRecipientCount");
+  if(el)el.textContent=`預計寄送：${recipients.length} 個 E-mail`;
+  if($("notifyEventBtn"))$("notifyEventBtn").disabled=!currentEvent;
+  return recipients.length;
+}
+
 function paymentDueInfo(value){
   if(!value)return null;
 
@@ -672,12 +766,21 @@ window.deleteEvent=async id=>{
 
 window.openRegistrations=async id=>{
   document.querySelectorAll(".tab-btn").forEach(b=>b.classList.toggle("active",b.dataset.tab==="registrations"));
-  $("eventsTab").hidden=true;$("registrationsTab").hidden=false;$("emailTab").hidden=true;$("eventFormWrap").hidden=true;$("eventSelect").value=id;await loadRegistrations(id);
+  $("eventsTab").hidden=true;$("registrationsTab").hidden=false;$("emailTab").hidden=true;$("eventFormWrap").hidden=true;$("eventNotificationWrap").hidden=true;$("eventSelect").value=id;await loadRegistrations(id);
 };
 
 $("eventSelect").addEventListener("change",async()=>{
   const id=Number($("eventSelect").value);
-  if(!id){currentEvent=null;currentRegistrations=[];$("summary").hidden=true;$("exportBtn").disabled=true;$("registrationList").innerHTML='<div class="empty">請先選擇一個活動。</div>';return}
+  if(!id){
+    currentEvent=null;
+    currentRegistrations=[];
+    $("summary").hidden=true;
+    $("exportBtn").disabled=true;
+    $("notifyEventBtn").disabled=true;
+    $("eventNotificationWrap").hidden=true;
+    $("registrationList").innerHTML='<div class="empty">請先選擇一個活動。</div>';
+    return;
+  }
   await loadRegistrations(id);
 });
 
@@ -717,6 +820,8 @@ function renderRegistrations(){
   $("capacityCount").textContent=currentEvent?.capacity??0;
   $("summary").hidden=false;
   $("exportBtn").disabled=!currentRegistrations.length;
+  $("notifyEventBtn").disabled=!currentEvent;
+  updateNotificationRecipientCount();
 
   if(!currentRegistrations.length){
     $("registrationList").innerHTML='<div class="empty">這個活動目前沒有報名資料。</div>';
@@ -812,6 +917,136 @@ function renderRegistrations(){
   }).join("");
 }
 
+
+
+$("notificationRecipientGroup").addEventListener("change",()=>{
+  updateNotificationRecipientCount();
+  $("notificationPreview").hidden=true;
+});
+
+$("notifyEventBtn").onclick=()=>{
+  if(!currentEvent)return;
+
+  clearMsg($("notificationMessageBox"));
+  $("eventNotificationWrap").hidden=false;
+  $("notificationRecipientGroup").value="active";
+  $("notificationSubject").value=`【瑋瑋老師的撒野記事錄】${currentEvent.title}－活動通知`;
+  $("notificationMessage").value="";
+  $("notificationPreview").hidden=true;
+  updateNotificationRecipientCount();
+  $("eventNotificationWrap").scrollIntoView({behavior:"smooth",block:"start"});
+};
+
+$("cancelNotificationBtn").onclick=()=>{
+  $("eventNotificationWrap").hidden=true;
+  $("notificationPreview").hidden=true;
+  clearMsg($("notificationMessageBox"));
+};
+
+$("previewNotificationBtn").onclick=()=>{
+  clearMsg($("notificationMessageBox"));
+
+  const subject=$("notificationSubject").value.trim();
+  const body=$("notificationMessage").value.trim();
+
+  if(!subject){
+    msg($("notificationMessageBox"),"請先填寫 Email 主旨。","error");
+    return;
+  }
+
+  if(!body){
+    msg($("notificationMessageBox"),"請先填寫通知內容。","error");
+    return;
+  }
+
+  $("notificationPreviewSubject").textContent=subject;
+  $("notificationPreviewBody").textContent=
+    `${currentEvent?.title||"活動"}\n${dateText(currentEvent?.event_date)} ${timeText(currentEvent?.start_time)}${currentEvent?.end_time?`–${timeText(currentEvent.end_time)}`:""}\n${currentEvent?.location||"未填地點"}\n\n您好：\n\n${body}\n\n瑋瑋老師的撒野記事錄`;
+  $("notificationPreview").hidden=false;
+};
+
+$("sendNotificationBtn").onclick=async()=>{
+  clearMsg($("notificationMessageBox"));
+
+  if(!currentEvent){
+    msg($("notificationMessageBox"),"請先選擇活動。","error");
+    return;
+  }
+
+  const recipientGroup=$("notificationRecipientGroup").value;
+  const recipientCount=updateNotificationRecipientCount();
+  const subject=$("notificationSubject").value.trim();
+  const messageText=$("notificationMessage").value.trim();
+
+  if(!recipientCount){
+    msg($("notificationMessageBox"),"目前選擇的收件群組沒有可寄送的 E-mail。","error");
+    return;
+  }
+
+  if(!subject){
+    msg($("notificationMessageBox"),"請填寫 Email 主旨。","error");
+    return;
+  }
+
+  if(!messageText){
+    msg($("notificationMessageBox"),"請填寫通知內容。","error");
+    return;
+  }
+
+  const ok=confirm(
+    `確定要寄送本場活動通知嗎？\n\n`+
+    `活動：${currentEvent.title}\n`+
+    `收件對象：${notificationGroupText(recipientGroup)}\n`+
+    `預計寄送：${recipientCount} 個 E-mail\n`+
+    `主旨：${subject}\n\n`+
+    `系統會為每個 E-mail 各寄一封獨立信件。`
+  );
+
+  if(!ok)return;
+
+  $("sendNotificationBtn").disabled=true;
+  $("sendNotificationBtn").textContent="寄送中…";
+  msg($("notificationMessageBox"),`正在寄送 ${recipientCount} 封活動通知…`,"success");
+
+  const {data,error}=await client.functions.invoke("send-event-notification",{
+    body:{
+      event_id:Number(currentEvent.id),
+      recipient_group:recipientGroup,
+      subject,
+      message:messageText
+    }
+  });
+
+  $("sendNotificationBtn").disabled=false;
+  $("sendNotificationBtn").textContent="確認寄送";
+
+  if(error || !data){
+    console.error(error,data);
+    msg(
+      $("notificationMessageBox"),
+      data?.error||error?.message||"活動通知寄送失敗。",
+      "error"
+    );
+    return;
+  }
+
+  const failed=Number(data.failed_count||0);
+  const sent=Number(data.sent_count||0);
+
+  if(failed){
+    msg(
+      $("notificationMessageBox"),
+      `寄送完成：成功 ${sent} 封、失敗 ${failed} 封。請查看 Supabase Function Log 或稍後重試。`,
+      "error"
+    );
+  }else{
+    msg(
+      $("notificationMessageBox"),
+      `活動通知已寄出，共 ${sent} 個 E-mail。`,
+      "success"
+    );
+  }
+};
 
 window.promoteWaitlist=async id=>{
   const r=currentRegistrations.find(x=>x.id===id);
