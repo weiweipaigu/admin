@@ -675,6 +675,7 @@ function eventCardHtml(e){
       </div>
       <div class="actions">
         <button class="btn secondary" onclick="editEvent(${e.id})">編輯活動</button>
+        <button class="btn secondary" onclick="duplicateEvent(${e.id})">複製活動</button>
         <button class="btn secondary" onclick="openRegistrations(${e.id})">查看名單</button>
         ${e.status==="archived"
           ? `<button class="btn secondary" onclick="unarchiveEvent(${e.id})">解除封存</button>`
@@ -768,16 +769,36 @@ $("clearEventFiltersBtn").onclick=()=>{
 $("newEventBtn").onclick=()=>openEventForm();
 $("cancelEventBtn").onclick=()=>{$("eventFormWrap").hidden=true;clearMsg($("eventFormMessage"))};
 
-function openEventForm(e=null){
-  $("eventFormWrap").hidden=false;$("eventFormTitle").textContent=e?"編輯活動":"新增活動";$("eventId").value=e?.id||"";
-  $("title").value=e?.title||"";$("eventDate").value=e?.event_date||"";$("startTime").value=timeText(e?.start_time);$("endTime").value=timeText(e?.end_time);
-  $("location").value=e?.location||"";$("capacity").value=e?.capacity??0;$("price").value=e?.price??0;$("status").value=e?.status||"open";
+function openEventForm(e=null,mode="new"){
+  const isDuplicate=mode==="duplicate";
+  const isEdit=Boolean(e) && !isDuplicate;
+
+  $("eventFormWrap").hidden=false;
+  $("eventFormTitle").textContent=isDuplicate?"複製活動":isEdit?"編輯活動":"新增活動";
+  $("eventId").value=isEdit?(e?.id||""):"";
+
+  $("title").value=e?.title||"";
+  // 複製活動時刻意清空日期，避免誤把舊日期直接建立成新活動。
+  $("eventDate").value=isDuplicate?"":(e?.event_date||"");
+  $("startTime").value=timeText(e?.start_time);
+  $("endTime").value=timeText(e?.end_time);
+  $("location").value=e?.location||"";
+  $("capacity").value=e?.capacity??0;
+  $("price").value=e?.price??0;
+  // 複製後預設關閉報名，確認新日期與內容後可改成 open 再儲存。
+  $("status").value=isDuplicate?"closed":(e?.status||"open");
   $("eventType").value=e?.event_type||"family_day";
   $("description").value=e ? (e.description||"") : DEFAULT_EVENT_DESCRIPTION;
-  clearMsg($("eventFormMessage"));$("eventFormWrap").scrollIntoView({behavior:"smooth"});
+
+  clearMsg($("eventFormMessage"));
+  if(isDuplicate){
+    msg($("eventFormMessage"),`已複製活動 #${e.id} 的內容。請設定新的活動日期並確認資料後再儲存；新活動會取得新的活動編號。`,"success");
+  }
+  $("eventFormWrap").scrollIntoView({behavior:"smooth"});
 }
 
-window.editEvent=id=>{const e=eventsCache.find(x=>x.id===id);if(e)openEventForm(e)};
+window.editEvent=id=>{const e=eventsCache.find(x=>x.id===id);if(e)openEventForm(e,"edit")};
+window.duplicateEvent=id=>{const e=eventsCache.find(x=>x.id===id);if(e)openEventForm(e,"duplicate")};
 
 $("eventForm").addEventListener("submit",async e=>{
   e.preventDefault();clearMsg($("eventFormMessage"));$("saveEventBtn").disabled=true;$("saveEventBtn").textContent="儲存中…";
