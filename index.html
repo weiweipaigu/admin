@@ -33,6 +33,15 @@
     .tab-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
     .toolbar{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
     .events-grid{display:grid;gap:14px}.event-card{border:1px solid var(--line);border-radius:18px;padding:16px;background:#fbfbf8}
+    .event-group{display:grid;gap:14px}
+    .event-group + .event-group{margin-top:20px}
+    .event-group-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:2px 2px 8px;border-bottom:1px solid var(--line)}
+    .event-group-title{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .event-group-title h3{margin:0;font-size:1.05rem}
+    .event-count-badge{display:inline-flex;align-items:center;padding:4px 9px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-size:.8rem;font-weight:700}
+    .past-toggle{border:1px solid var(--line);background:#fff;color:var(--accent);border-radius:999px;padding:7px 12px;font-weight:700;cursor:pointer}
+    .past-toggle:hover{border-color:var(--accent)}
+    .event-group-note{font-size:.86rem;color:var(--muted);margin-top:-4px}
     .event-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap}.event-meta{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px}
     .meta-box{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px}.meta-label{font-size:.8rem;color:var(--muted)}.meta-value{font-weight:700}
     .status{display:inline-block;padding:5px 10px;border-radius:999px;font-size:.84rem;font-weight:700}.status.open{background:var(--success-soft);color:var(--success)}.status.closed{background:var(--danger-soft);color:var(--danger)}.status.archived{background:#eceae5;color:#6d6a62}
@@ -385,6 +394,7 @@ const client=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 const $=id=>document.getElementById(id);
 let eventsCache=[],currentEvent=null,currentRegistrations=[];
 let eventStatsCache=new Map();
+let pastEventsExpanded=false;
 
 function msg(el,text,type){el.textContent=text;el.className=`message ${type}`}
 function clearMsg(el){el.textContent="";el.className="message"}
@@ -646,9 +656,40 @@ async function getPublicStats(eventId){
   return data&&data[0]?data[0]:null;
 }
 
+function eventCardHtml(e){
+  const stats=eventStatsCache.get(Number(e.id));
+  const registered=stats?.registered??0;
+  const remaining=stats?.remaining??e.capacity;
+
+  return `
+    <article class="event-card">
+      <div class="event-head">
+        <div><h3>#${e.id}｜${esc(e.title)}</h3><div class="small">${dateText(e.event_date)} ${timeText(e.start_time)}${e.end_time?`–${timeText(e.end_time)}`:""}｜${esc(e.location||"未填地點")}</div><span class="type-chip">${esc(eventTypeText(e.event_type))}</span></div>
+        <span class="status ${e.status==="open"?"open":e.status==="archived"?"archived":"closed"}">${e.status==="open"?"開放報名":e.status==="archived"?"已封存":"關閉報名"}</span>
+      </div>
+      <div class="event-meta">
+        <div class="meta-box"><div class="meta-label">總名額</div><div class="meta-value">${e.capacity}</div></div>
+        <div class="meta-box"><div class="meta-label">已報名</div><div class="meta-value">${registered}</div></div>
+        <div class="meta-box"><div class="meta-label">剩餘</div><div class="meta-value">${remaining}</div></div>
+        <div class="meta-box"><div class="meta-label">費用</div><div class="meta-value">${Number(e.price)>0?`NT$ ${Number(e.price).toLocaleString("zh-TW")} 起`:"詳見說明"}</div></div>
+      </div>
+      <div class="actions">
+        <button class="btn secondary" onclick="editEvent(${e.id})">編輯活動</button>
+        <button class="btn secondary" onclick="openRegistrations(${e.id})">查看名單</button>
+        ${e.status==="archived"
+          ? `<button class="btn secondary" onclick="unarchiveEvent(${e.id})">解除封存</button>`
+          : `<button class="btn ${e.status==="open"?"danger":"secondary"}" onclick="toggleStatus(${e.id},'${e.status}')">${e.status==="open"?"關閉報名":"重新開放"}</button>
+             <button class="btn secondary" onclick="archiveEvent(${e.id})">封存活動</button>`}
+        <button class="btn danger" onclick="deleteEvent(${e.id})">永久刪除</button>
+      </div>
+    </article>`;
+}
+
 function renderEvents(){
   const visibleEvents=getFilteredSortedEvents();
   const total=eventsCache.length;
+  const today=localTodayKey();
+  const query=normalizedSearchText($("eventSearch")?.value);
 
   $("eventFilterCount").textContent=
     visibleEvents.length===total
@@ -663,39 +704,50 @@ function renderEvents(){
     return;
   }
 
-  const cards=[];
+  const upcomingEvents=visibleEvents.filter(e=>(e.event_date||"")>=today);
+  const pastEvents=visibleEvents.filter(e=>(e.event_date||"")<today);
+  const showPast=pastEventsExpanded || Boolean(query);
 
-  visibleEvents.forEach(e=>{
-    const stats=eventStatsCache.get(Number(e.id));
-    const registered=stats?.registered??0;
-    const remaining=stats?.remaining??e.capacity;
+  const upcomingHtml=upcomingEvents.length
+    ? upcomingEvents.map(eventCardHtml).join("")
+    : '<div class="empty">目前沒有符合條件的近期／未來活動。</div>';
 
-    cards.push(`
-      <article class="event-card">
-        <div class="event-head">
-          <div><h3>#${e.id}｜${esc(e.title)}</h3><div class="small">${dateText(e.event_date)} ${timeText(e.start_time)}${e.end_time?`–${timeText(e.end_time)}`:""}｜${esc(e.location||"未填地點")}</div><span class="type-chip">${esc(eventTypeText(e.event_type))}</span></div>
-          <span class="status ${e.status==="open"?"open":e.status==="archived"?"archived":"closed"}">${e.status==="open"?"開放報名":e.status==="archived"?"已封存":"關閉報名"}</span>
-        </div>
-        <div class="event-meta">
-          <div class="meta-box"><div class="meta-label">總名額</div><div class="meta-value">${e.capacity}</div></div>
-          <div class="meta-box"><div class="meta-label">已報名</div><div class="meta-value">${registered}</div></div>
-          <div class="meta-box"><div class="meta-label">剩餘</div><div class="meta-value">${remaining}</div></div>
-          <div class="meta-box"><div class="meta-label">費用</div><div class="meta-value">${Number(e.price)>0?`NT$ ${Number(e.price).toLocaleString("zh-TW")} 起`:"詳見說明"}</div></div>
-        </div>
-        <div class="actions">
-          <button class="btn secondary" onclick="editEvent(${e.id})">編輯活動</button>
-          <button class="btn secondary" onclick="openRegistrations(${e.id})">查看名單</button>
-          ${e.status==="archived"
-            ? `<button class="btn secondary" onclick="unarchiveEvent(${e.id})">解除封存</button>`
-            : `<button class="btn ${e.status==="open"?"danger":"secondary"}" onclick="toggleStatus(${e.id},'${e.status}')">${e.status==="open"?"關閉報名":"重新開放"}</button>
-               <button class="btn secondary" onclick="archiveEvent(${e.id})">封存活動</button>`}
-          <button class="btn danger" onclick="deleteEvent(${e.id})">永久刪除</button>
-        </div>
-      </article>`);
-  });
+  const pastHtml=pastEvents.length
+    ? pastEvents.map(eventCardHtml).join("")
+    : '<div class="empty">目前沒有符合條件的過往活動。</div>';
 
-  $("eventsList").innerHTML=cards.join("");
+  $("eventsList").innerHTML=`
+    <section class="event-group" aria-label="近期與未來活動">
+      <div class="event-group-head">
+        <div class="event-group-title">
+          <h3>近期／未來活動</h3>
+          <span class="event-count-badge">${upcomingEvents.length} 場</span>
+        </div>
+      </div>
+      <div class="event-group-note">今天與未來日期的活動會固定顯示在這裡。</div>
+      <div class="event-group">${upcomingHtml}</div>
+    </section>
+
+    <section class="event-group" aria-label="過往活動">
+      <div class="event-group-head">
+        <div class="event-group-title">
+          <h3>過往活動</h3>
+          <span class="event-count-badge">${pastEvents.length} 場</span>
+        </div>
+        ${pastEvents.length
+          ? `<button class="past-toggle" type="button" onclick="togglePastEventsSection()" aria-expanded="${showPast?"true":"false"}">${showPast?"▲ 收起":"▼ 展開"}</button>`
+          : ""}
+      </div>
+      <div class="event-group-note">${query?"搜尋中已自動展開過往活動。":"過往活動預設收折，需要時再展開查看。"}</div>
+      <div id="pastEventsContainer" class="event-group" ${showPast?"":"hidden"}>${pastHtml}</div>
+    </section>
+  `;
 }
+
+window.togglePastEventsSection=()=>{
+  pastEventsExpanded=!pastEventsExpanded;
+  renderEvents();
+};
 
 ["eventSort","eventStatusFilter","eventTypeFilter"].forEach(id=>{
   $(id).addEventListener("change",renderEvents);
@@ -708,6 +760,7 @@ $("clearEventFiltersBtn").onclick=()=>{
   $("eventSort").value="upcoming_first";
   $("eventStatusFilter").value="";
   $("eventTypeFilter").value="";
+  pastEventsExpanded=false;
   renderEvents();
   $("eventSearch").focus();
 };
